@@ -46,7 +46,7 @@
     {
         /* MARK: projectFormat */
         NSString *projectFormat = [self readSecureFromKey:@"NXProjectFormat" withDefaultValue:@"NXKate"];
-        
+
         if([projectFormat isEqualToString:@"NXKate"])
         {
             /*
@@ -72,7 +72,7 @@
         {
             _projectFormat = NXProjectFormatDefault;
         }
-        
+
         /* MARK: keys */
         _type = (NXProjectType)[self readIntegerForKey:@"LDEProjectType" withDefaultValue:NXProjectTypeApp];
         _executable = [self readSecureFromKey:@"LDEExecutable" withDefaultValue:@"Unknown"];
@@ -83,10 +83,10 @@
         _infoDictionary = [self readSecureFromKey:@"LDEBundleInfo" withDefaultValue:@{}];
         _deploymentTarget = [self readSecureFromKey:@"LDEMinimumVersion" withDefaultValue:NXOSVersion.maximumBuildVersion.pickerVersionString];
         _outputPath = [self readKey:@"LDEOutputPath"];
-        
+
         /* MARK: compiler flags */
         NSArray *compilerFlags = [self readSecureFromKey:@"LDECompilerFlags" withDefaultValue:@[]];
-        
+
         if([self projectFormat] == NXProjectFormatFalcon)
         {
             _compilerFlags = compilerFlags;
@@ -94,7 +94,7 @@
         else if([self projectFormat] == NXProjectFormatKate)
         {
             NSMutableArray *array = [compilerFlags mutableCopy];
-            
+
             [array addObjectsFromArray:@[
                 @"-target",
                 [self readSecureFromKey:@"LDEOverwriteTriple" withDefaultValue:[NSString stringWithFormat:@"apple-arm64-ios%@", [self deploymentTarget]]],
@@ -103,14 +103,29 @@
                 @"-resource-dir",
                 [[Bootstrap shared] bootstrapPath:@"/Include"]
             ]];
-            
+
             _compilerFlags = array;
         }
         else
         {
             _compilerFlags = @[];
         }
-        
+
+        /* MARK: Swift compiler */
+        _swiftCompilerPath = [self readSecureFromKey:@"LDESwiftCompilerPath" withDefaultValue:@"$(BSROOT)/Toolchains/Swift/usr/bin/swiftc"];
+        _swiftModuleName = [self readSecureFromKey:@"LDESwiftModuleName" withDefaultValue:[self executable]];
+        _swiftBridgingHeader = [self readSecureFromKey:@"LDESwiftBridgingHeader" withDefaultValue:@""];
+
+        NSArray *swiftCompilerFlags = [self readSecureFromKey:@"LDESwiftCompilerFlags" withDefaultValue:@[
+            @"-target",
+            @"arm64-apple-ios$(LDEMinimumVersion)",
+            @"-sdk",
+            @"$(SDKROOT)",
+            @"-swift-version",
+            @"5"
+        ]];
+        _swiftCompilerFlags = swiftCompilerFlags;
+
         /* MARK: linker flags */
         _linkerFlags = [self readSecureFromKey:@"LDELinkerFlags" withDefaultValue:@[]];
     }
@@ -182,7 +197,7 @@
 {
     NSString *projectPath = [NSString stringWithFormat:@"%@/%@", path, [[NSUUID UUID] UUIDString]];
     NSFileManager *defaultFileManager = [NSFileManager defaultManager];
-    
+
     NSMutableArray *directoryList = [NSMutableArray arrayWithArray:@[@"",@"/Config"]];
     if(type == NXProjectTypeApp)
     {
@@ -198,7 +213,7 @@
             return nil;
         }
     }
-    
+
     NSDictionary *entitlementsPlist = @{
 #if !JAILBREAK_ENV
         @"com.nyxian.pe.get_task_allowed": @(YES),
@@ -219,7 +234,7 @@
         @"platform-application": @(YES)
 #endif // !JAILBREAK_ENV
     };
-    
+
     NSDictionary *projConfigPlist = nil;
     switch(type)
     {
@@ -262,6 +277,17 @@
                     @"UIKit"
                 ],
                 @"LDELinkerFlags": @[],
+                @"LDESwiftCompilerPath": @"$(BSROOT)/Toolchains/Swift/usr/bin/swiftc",
+                @"LDESwiftCompilerFlags": @[
+                    @"-target",
+                    @"arm64-apple-ios$(LDEMinimumVersion)",
+                    @"-sdk",
+                    @"$(SDKROOT)",
+                    @"-swift-version",
+                    @"5"
+                ],
+                @"LDESwiftModuleName": name,
+                @"LDESwiftBridgingHeader": @"",
                 @"LDEOutputPath": @"$(CACHEROOT)/Payload/$(LDEDisplayName).app/$(LDEExecutable)",
             };
             break;
@@ -273,7 +299,18 @@
                 @"LDEProjectType": @(type),
                 @"LDEMinimumVersion": NXOSVersion.hostVersion.pickerVersionString ?: NXOSVersion.maximumBuildVersion.versionString,
                 @"LDECompilerFlags": NXCompilerFlagsForCodeTemplateLanguage(language),
-                @"LDELinkerFlags": @[],
+                @"LDELinkerFlags": NXLinkerFlagsForCodeTemplateLanguage(language),
+                @"LDESwiftCompilerPath": @"$(BSROOT)/Toolchains/Swift/usr/bin/swiftc",
+                @"LDESwiftCompilerFlags": @[
+                    @"-target",
+                    @"arm64-apple-ios$(LDEMinimumVersion)",
+                    @"-sdk",
+                    @"$(SDKROOT)",
+                    @"-swift-version",
+                    @"5"
+                ],
+                @"LDESwiftModuleName": name,
+                @"LDESwiftBridgingHeader": @"",
                 @"LDEOutputPath": @"$(CACHEROOT)/$(LDEExecutable)",
             };
             break;
@@ -284,61 +321,61 @@
             };
             break;
     }
-    
+
     NSDictionary *plistList = @{
         @"/Config/Project.plist": projConfigPlist,
         @"/Config/Entitlements.plist": entitlementsPlist
     };
-    
+
     for(NSString *key in plistList)
     {
         NSError *error;
         NSDictionary *plistItem = plistList[key];
         NSData *plistData = [NSPropertyListSerialization dataWithPropertyList:plistItem format:NSPropertyListXMLFormat_v1_0 options:0 error:&error];
         [plistData writeToFile:[NSString stringWithFormat:@"%@%@", projectPath, key] atomically:YES];
-        
+
         if(error)
         {
             [defaultFileManager removeItemAtPath:projectPath error:nil];
             return nil;
         }
     }
-    
+
     NXCodeTemplateScheme scheme = NXCodeTemplateSchemeFromProjectType(type);
     if(scheme == NXCodeTemplateSchemeInvalid)
     {
         [[NSFileManager defaultManager] removeItemAtPath:projectPath error:nil];
         return nil;
     }
-    
+
     if(!NXCodeTemplateMakeProjectStructure(scheme, language, name, projectPath))
     {
         [[NSFileManager defaultManager] removeItemAtPath:projectPath error:nil];
         return nil;
     }
-    
+
     return [NXProject projectWithPath:projectPath];
 }
 
 + (NSMutableDictionary<NSString*,NSMutableArray<NXProject*>*>*)listProjectsAtPath:(NSString*)path
 {
     NSMutableDictionary<NSString*,NSMutableArray<NXProject*>*> *projectList = [[NSMutableDictionary alloc] init];
-    
+
     NSMutableArray<NXProject*> *applicationProjects = [[NSMutableArray alloc] init];
     NSMutableArray<NXProject*> *utilityProjects = [[NSMutableArray alloc] init];
     NSMutableArray<NXProject*> *unknownProjects = [[NSMutableArray alloc] init];
-    
+
     projectList[@"applications"] = applicationProjects;
     projectList[@"utilities"] = utilityProjects;
     projectList[@"unknown"] = unknownProjects;
-    
+
     NSError *error;
     NSArray *pathEntries = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:path error:&error];
     if(error) return projectList;
     for(NSString *entry in pathEntries)
     {
         NXProject *project = [[NXProject alloc] initWithPath:[NSString stringWithFormat:@"%@/%@",path,entry]];
-        
+
         if(project.projectConfig.type == NXProjectTypeApp)
         {
             [applicationProjects addObject:project];
@@ -352,7 +389,7 @@
             [unknownProjects addObject:project];
         }
     }
-    
+
     return projectList;
 }
 

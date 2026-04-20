@@ -48,6 +48,27 @@
         return;
     }
     
+    if([NSProcessInfo.processInfo.environment[@"NYXIAN_SWIFT_TEST"] isEqualToString:@"1"])
+    {
+        UILabel *label = [[UILabel alloc] init];
+        label.text = @"Running NYXIAN_SWIFT_TEST...";
+        label.frame = UIScreen.mainScreen.bounds;
+        label.numberOfLines = 0;
+        label.textAlignment = NSTextAlignmentCenter;
+        label.font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
+        [_window addSubview:label];
+        [_window makeKeyAndVisible];
+        [_window bringSubviewToFront:label];
+        
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            NSString *result = [SwiftToolchainTestRunner runSynchronously];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                label.text = result;
+            });
+        });
+        return;
+    }
+    
 #if JAILBREAK_ENV
     int ret = shell(@[[[NSBundle mainBundle] executablePath]], 0, nil, nil);
     if(ret != 0)

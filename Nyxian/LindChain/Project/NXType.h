@@ -48,6 +48,7 @@ static NXCodeTemplateLanguage const NXCodeTemplateLanguageSelf = @"Self";       
 static NXCodeTemplateLanguage const NXCodeTemplateLanguageObjC = @"ObjC";
 static NXCodeTemplateLanguage const NXCodeTemplateLanguageC = @"C";
 static NXCodeTemplateLanguage const NXCodeTemplateLanguageCpp = @"C++";
+static NXCodeTemplateLanguage const NXCodeTemplateLanguageSwift = @"Swift";
 
 NXCodeTemplateScheme NXCodeTemplateSchemeFromProjectType(NXProjectType type);
 

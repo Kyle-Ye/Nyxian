@@ -84,7 +84,6 @@ static int runCommand(NSArray<NSString *> *args,
     
     createArgv(args, &argc, &argv);
     
-    static NSString *path;
     static dispatch_once_t onceToken;
     static NSArray *baseEnv;
     dispatch_once(&onceToken, ^{
@@ -117,9 +116,11 @@ static int runCommand(NSArray<NSString *> *args,
     posix_spawnattr_t attr;
     posix_spawnattr_init(&attr);
 
+#if JAILBREAK_ENV
     posix_spawnattr_set_persona_np(&attr, 99, 1);
     posix_spawnattr_set_persona_uid_np(&attr, uid);
     posix_spawnattr_set_persona_gid_np(&attr, uid);
+#endif
 
     errno_t result = posix_spawnp(&pid, [args[0] UTF8String], &actions, &attr, (char * const *)argv, (char * const *)envp);
 
@@ -172,4 +173,3 @@ int shell(NSArray *command, uid_t uid, NSArray<NSString *> *env, NSString **outp
     
     return runCommand(command, uid ?: 0, env ?: @[], output);
 }
-

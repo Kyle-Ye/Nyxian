@@ -68,7 +68,12 @@ import UIKit
             self.createProject(mode: .utility, withLanguage: .objC)
         }
         
-        let utilityMenu: UIMenu = UIMenu(title: "Utility", image: UIImage(systemName: "wrench.adjustable.fill"), children: [CUtility, CPPCUtility, ObjCCUtility])
+        let SwiftUtility: UIAction = UIAction(title: "Swift") { [weak self] _ in
+            guard let self = self else { return }
+            self.createProject(mode: .utility, withLanguage: .swift)
+        }
+        
+        let utilityMenu: UIMenu = UIMenu(title: "Utility", image: UIImage(systemName: "wrench.adjustable.fill"), children: [CUtility, CPPCUtility, ObjCCUtility, SwiftUtility])
         
         let createMenu: UIMenu = UIMenu(title: "Create Project", image: UIImage(systemName: "folder.fill"), children: [applicationMenu, utilityMenu])
         

@@ -40,6 +40,10 @@
 @property (nonatomic,strong,readonly) NSArray<NSString*> *compilerFlags;
 @property (nonatomic,strong,readonly) NSArray<NSString*> *linkerFlags;
 @property (nonatomic,strong,readonly) NSString *deploymentTarget;
+@property (nonatomic,strong,readonly) NSString *swiftCompilerPath;
+@property (nonatomic,strong,readonly) NSArray<NSString*> *swiftCompilerFlags;
+@property (nonatomic,strong,readonly) NSString *swiftModuleName;
+@property (nonatomic,strong,readonly) NSString *swiftBridgingHeader;
 @property (nonatomic,strong,readonly) NSString *outputPath;
 
 + (NSArray*)sdkCompilerFlags;

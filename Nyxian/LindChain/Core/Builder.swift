@@ -35,6 +35,8 @@ class Builder: NSObject, CCKDriverDelegate {
     
     private var compilerJobs: [CCKJob] = []
     private var linkerJobs: [CCKJob] = []
+    private var swiftSourceFiles: [String] = []
+    private var swiftObjectFiles: [String] = []
     
     private let database: DebugDatabase
     
@@ -57,14 +59,31 @@ class Builder: NSObject, CCKDriverDelegate {
         
         try? syncFolderStructure(from: URL(fileURLWithPath: self.project.path), to: URL(fileURLWithPath: self.project.cachePath))
         
-        guard let codeFiles = LDEFilesFinder(self.project.path, ["c","cpp","m","mm"], ["Resources"]) else {
+        guard let codeFiles = LDEFilesFinder(self.project.path, ["c","cpp","m","mm"], ["Resources"]),
+              let swiftFiles = LDEFilesFinder(self.project.path, ["swift"], ["Resources"]) else {
             return nil
+        }
+        
+        self.swiftSourceFiles = swiftFiles
+        if self.swiftSourceFiles.count > 0 {
+            let swiftObjectPath = "\(self.project.cachePath!)/Swift/\(self.project.projectConfig.swiftModuleName ?? self.project.projectConfig.executable ?? "SwiftModule").o"
+            self.swiftObjectFiles = [swiftObjectPath]
+            driverFlags.append(contentsOf: self.swiftObjectFiles)
         }
         
         driverFlags.append(contentsOf: codeFiles)
         driverFlags.append("-o")
         driverFlags.append(self.project.machoPath)
-        driverFlags.append("-Wl,\(self.project.projectConfig.linkerFlags.joined(separator: " ").split(separator: " ").joined(separator: ","))")
+        
+        var linkerFlags = self.project.projectConfig.linkerFlags ?? []
+        if self.swiftSourceFiles.count > 0 {
+            linkerFlags.append(contentsOf: [
+                "-L\(Bootstrap.shared.bootstrapPath("/Toolchains/Swift/usr/lib/swift/iphoneos"))",
+                "-rpath",
+                "/usr/lib/swift"
+            ])
+        }
+        driverFlags.append("-Wl,\(linkerFlags.joined(separator: " ").split(separator: " ").joined(separator: ","))")
         
         self.argsString = driverFlags.joined(separator: " ")
         
@@ -265,6 +284,70 @@ class Builder: NSObject, CCKDriverDelegate {
             } catch {
                 throw NSError(domain: "com.cr4zy.nyxian.builder.compile", code: 1, userInfo: [NSLocalizedDescriptionKey:error.localizedDescription])
             }
+        }
+    }
+    
+    private func swiftEnvironment() -> [String] {
+        return [
+            "SDKROOT=\(Bootstrap.shared.sdkPath)",
+            "BSROOT=\(Bootstrap.shared.bootstrapPath("/"))",
+            "CACHEROOT=\(self.project.cachePath!)",
+            "SRCROOT=\(self.project.path!)"
+        ]
+    }
+    
+    func compileSwift() throws {
+        guard self.swiftSourceFiles.count > 0 else {
+            return
+        }
+        
+        guard self.swiftSourceFiles.count == 1,
+              let swiftSourceFile = self.swiftSourceFiles.first,
+              let swiftObjectFile = self.swiftObjectFiles.first else {
+            throw NSError(domain: "com.cr4zy.nyxian.builder.swift", code: 1, userInfo: [NSLocalizedDescriptionKey:"Swift proof-of-concept currently supports exactly one Swift source file."])
+        }
+        
+        let swiftCompiler = self.project.projectConfig.swiftCompilerPath ?? "\(Bootstrap.shared.bootstrapPath("/"))/Toolchains/Swift/usr/bin/swiftc"
+        let swiftModuleName = self.project.projectConfig.swiftModuleName ?? self.project.projectConfig.executable ?? "SwiftModule"
+        let swiftModuleDirectory = "\(self.project.cachePath!)/Swift"
+        let swiftModulePath = "\(swiftModuleDirectory)/\(swiftModuleName).swiftmodule"
+        
+        try FileManager.default.createDirectory(atPath: swiftModuleDirectory, withIntermediateDirectories: true)
+        
+        var arguments: [String] = [
+            swiftCompiler,
+            swiftSourceFile
+        ]
+        arguments.append(contentsOf: self.project.projectConfig.swiftCompilerFlags ?? [])
+        arguments.append(contentsOf: [
+            "-module-name",
+            swiftModuleName,
+            "-emit-object",
+            "-emit-module",
+            "-emit-module-path",
+            swiftModulePath,
+            "-o",
+            swiftObjectFile
+        ])
+        
+        if let bridgingHeader = self.project.projectConfig.swiftBridgingHeader,
+           !bridgingHeader.isEmpty {
+            arguments.append(contentsOf: ["-import-objc-header", bridgingHeader])
+        }
+        
+        var output: NSString?
+        let status = shell(arguments, 0, self.swiftEnvironment(), &output)
+        let compilerOutput = (output as String?)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        
+        if status != 0 {
+            if !compilerOutput.isEmpty {
+                self.database.addMessage(message: compilerOutput, title: "Swift Compiler", severity: .error)
+            }
+            throw NSError(domain: "com.cr4zy.nyxian.builder.swift", code: Int(status), userInfo: [NSLocalizedDescriptionKey: compilerOutput.isEmpty ? "Swift compilation failed" : compilerOutput])
+        }
+        
+        if !compilerOutput.isEmpty {
+            self.database.addMessage(message: compilerOutput, title: "Swift Compiler", severity: .note)
         }
     }
     
@@ -475,6 +558,7 @@ class Builder: NSObject, CCKDriverDelegate {
                     (nil,nil,{ try builder.headsup() }),
                     (nil,nil,{ try builder.clean() }),
                     (nil,nil,{ try builder.prepare() }),
+                    (nil,nil,{ try builder.compileSwift() }),
                     (nil,nil,{ try builder.compile() }),
                     ("link",0.3,{ try builder.link() }),
                     ("arrow.down.app.fill",nil,{try builder.install(buildType: buildType, outPipe: outPipe, inPipe: inPipe) })
