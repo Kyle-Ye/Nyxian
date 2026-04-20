@@ -1,6 +1,7 @@
 **/.DS_store
 Nyxian/LindChain/CoreCompiler.framework
 build/
+Shared/SwiftToolchain/
 *.ipa
 *.deb
 *.tipa

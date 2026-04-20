@@ -55,6 +55,8 @@
         label.frame = UIScreen.mainScreen.bounds;
         label.numberOfLines = 0;
         label.textAlignment = NSTextAlignmentCenter;
+        label.textColor = UIColor.whiteColor;
+        label.backgroundColor = UIColor.blackColor;
         label.font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
         [_window addSubview:label];
         [_window makeKeyAndVisible];

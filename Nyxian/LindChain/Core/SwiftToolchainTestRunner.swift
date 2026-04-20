@@ -20,6 +20,7 @@
 */
 
 import Foundation
+import Darwin
 
 @objc class SwiftToolchainTestRunner: NSObject {
     private static func shellOutput(_ arguments: [String], environment: [String] = []) -> (Int32, String) {
@@ -28,19 +29,41 @@ import Foundation
         return (status, (output as String?) ?? "")
     }
     
-    private static func existingSwiftCompilerPath() -> String? {
+    private static func swiftCompilerCandidates() -> [String] {
         let environment = ProcessInfo.processInfo.environment
-        let candidates = [
+        return [
             environment["NYXIAN_SWIFT_COMPILER"],
             "\(Bootstrap.shared.bootstrapPath("/"))/Toolchains/Swift/usr/bin/swiftc",
             "\(Bundle.main.bundlePath)/Shared/SwiftToolchain/usr/bin/swiftc",
             "\(Bundle.main.bundlePath)/SwiftToolchain/usr/bin/swiftc",
             "\(Bundle.main.bundlePath)/swiftc"
         ].compactMap { $0 }
-        
+    }
+
+    private static func existingSwiftCompilerPath() -> String? {
+        let fileManager = FileManager.default
+        let candidates = swiftCompilerCandidates()
         return candidates.first {
-            FileManager.default.isExecutableFile(atPath: $0)
+            var isDirectory = ObjCBool(false)
+            return fileManager.fileExists(atPath: $0, isDirectory: &isDirectory) && !isDirectory.boolValue
         }
+    }
+
+    private static func candidateDiagnostics() -> String {
+        let fileManager = FileManager.default
+        return swiftCompilerCandidates().map { path in
+            var isDirectory = ObjCBool(false)
+            let exists = fileManager.fileExists(atPath: path, isDirectory: &isDirectory)
+            let executable = fileManager.isExecutableFile(atPath: path)
+            let readable = fileManager.isReadableFile(atPath: path)
+            let accessExecutable = access(path, X_OK) == 0
+            let attributes = (try? fileManager.attributesOfItem(atPath: path)) ?? [:]
+            let permissions = (attributes[.posixPermissions] as? NSNumber)?.uint16Value
+            let size = attributes[.size] as? NSNumber
+            let permissionsText = permissions.map { String(format: "%04o", $0) } ?? "n/a"
+            let sizeText = size.map { "\($0)" } ?? "n/a"
+            return "- \(path)\n  exists=\(exists) directory=\(isDirectory.boolValue) readable=\(readable) executable=\(executable) accessX=\(accessExecutable) mode=\(permissionsText) size=\(sizeText)"
+        }.joined(separator: "\n")
     }
     
     private static func writeLog(_ message: String) {
@@ -85,15 +108,14 @@ import Foundation
             let message = """
             NYXIAN_SWIFT_TEST missing iOS-native swiftc.
             Checked:
-            - \(bootstrapRoot)/Toolchains/Swift/usr/bin/swiftc
-            - \(Bundle.main.bundlePath)/Shared/SwiftToolchain/usr/bin/swiftc
-            - \(Bundle.main.bundlePath)/SwiftToolchain/usr/bin/swiftc
-            - \(Bundle.main.bundlePath)/swiftc
+            \(candidateDiagnostics())
             Override with NYXIAN_SWIFT_COMPILER.
             """
             writeLog(message)
             return message
         }
+
+        _ = chmod(swiftcPath, 0o755)
         
         let environment = [
             "SDKROOT=\(sdkPath)",
