@@ -34,10 +34,54 @@ import Darwin
         return [
             environment["NYXIAN_SWIFT_COMPILER"],
             "\(Bootstrap.shared.bootstrapPath("/"))/Toolchains/Swift/usr/bin/swiftc",
-            "\(Bundle.main.bundlePath)/Shared/SwiftToolchain/usr/bin/swiftc",
-            "\(Bundle.main.bundlePath)/SwiftToolchain/usr/bin/swiftc",
-            "\(Bundle.main.bundlePath)/swiftc"
+            "\(Bundle.main.bundlePath)/Shared/SwiftToolchain/usr/bin/swiftc"
         ].compactMap { $0 }
+    }
+
+    private static func installBundledSwiftToolchainIfNeeded() throws {
+        let fileManager = FileManager.default
+        let bundledToolchain = "\(Bundle.main.bundlePath)/Shared/SwiftToolchain"
+        let installedToolchain = Bootstrap.shared.bootstrapPath("/Toolchains/Swift")
+        let installedSwiftc = "\(installedToolchain)/usr/bin/swiftc"
+
+        guard fileManager.fileExists(atPath: "\(bundledToolchain)/usr/bin/swiftc") else {
+            if fileManager.fileExists(atPath: installedSwiftc) {
+                try fixExecutablePermissions(in: installedToolchain)
+            }
+            return
+        }
+
+        if fileManager.fileExists(atPath: installedToolchain) {
+            try fileManager.removeItem(atPath: installedToolchain)
+        }
+        try fileManager.createDirectory(
+            atPath: (installedToolchain as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true
+        )
+        try fileManager.copyItem(atPath: bundledToolchain, toPath: installedToolchain)
+        try fixExecutablePermissions(in: installedToolchain)
+    }
+
+    private static func fixExecutablePermissions(in toolchainPath: String) throws {
+        let binPath = "\(toolchainPath)/usr/bin"
+        let fileManager = FileManager.default
+
+        try? fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: toolchainPath)
+        try? fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: "\(toolchainPath)/usr")
+        try? fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binPath)
+
+        guard let enumerator = fileManager.enumerator(atPath: binPath) else {
+            return
+        }
+
+        for case let relativePath as String in enumerator {
+            let path = "\(binPath)/\(relativePath)"
+            var isDirectory = ObjCBool(false)
+            guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory) else {
+                continue
+            }
+            try? fileManager.setAttributes([.posixPermissions: isDirectory.boolValue ? 0o755 : 0o755], ofItemAtPath: path)
+        }
     }
 
     private static func existingSwiftCompilerPath() -> String? {
@@ -100,6 +144,14 @@ import Darwin
         
         guard fileManager.fileExists(atPath: sdkPath) else {
             let message = "NYXIAN_SWIFT_TEST missing SDK at \(sdkPath)"
+            writeLog(message)
+            return message
+        }
+
+        do {
+            try installBundledSwiftToolchainIfNeeded()
+        } catch {
+            let message = "NYXIAN_SWIFT_TEST failed installing bundled Swift toolchain: \(error.localizedDescription)"
             writeLog(message)
             return message
         }
