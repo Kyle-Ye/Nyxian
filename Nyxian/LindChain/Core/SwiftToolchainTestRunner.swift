@@ -35,18 +35,25 @@ import CoreCompiler
         Bootstrap.shared.waitTillDone()
         
         let fileManager = FileManager.default
-        let workDirectory = "\(NSTemporaryDirectory())/nyxian-swift-test"
+        let workDirectory = Bootstrap.shared.bootstrapPath("/Cache/nyxian-swift-test")
         let sourcePath = "\(workDirectory)/main.swift"
         let objectPath = "\(workDirectory)/SwiftProbe.o"
+        let executablePath = "\(workDirectory)/SwiftProbe"
         let moduleCachePath = "\(workDirectory)/ModuleCache"
         let sdkPath = Bootstrap.shared.sdkPath
         let resourceDirectory = "\(Bundle.main.bundlePath)/Shared/SwiftToolchain/usr/lib/swift"
+        let sdkSwiftLibraryPath = "\(sdkPath)/usr/lib/swift"
+        let sdkFrameworkPath = "\(sdkPath)/System/Library/Frameworks"
+        let sdkSubFrameworkPath = "\(sdkPath)/System/Library/SubFrameworks"
         
         do {
             try? fileManager.removeItem(atPath: workDirectory)
             try fileManager.createDirectory(atPath: workDirectory, withIntermediateDirectories: true)
             try """
-            public func nyxian_swift_device_proof() {}
+            import Foundation
+            import UIKit
+
+            print("hello Nyxian build from \\(UIDevice.current.systemName) \\(UIDevice.current.systemVersion)")
             """.write(toFile: sourcePath, atomically: true, encoding: .utf8)
         } catch {
             let message = "NYXIAN_SWIFT_TEST failed preparing source: \(error.localizedDescription)"
@@ -71,7 +78,7 @@ import CoreCompiler
             "-primary-file",
             sourcePath,
             "-target",
-            "arm64-apple-ios17.0",
+            "arm64e-apple-ios17.0",
             "-Xllvm",
             "-aarch64-use-tbi",
             "-enable-objc-interop",
@@ -81,7 +88,6 @@ import CoreCompiler
             resourceDirectory,
             "-module-cache-path",
             moduleCachePath,
-            "-parse-stdlib",
             "-no-color-diagnostics",
             "-Xcc",
             "-fno-color-diagnostics",
@@ -99,16 +105,154 @@ import CoreCompiler
             writeLog(message)
             return message
         }
+
+        guard let linkDriver = CCKDriver(arguments: [
+            "-target",
+            "arm64e-apple-ios17.0",
+            "-isysroot",
+            sdkPath,
+            objectPath,
+            "-o",
+            executablePath,
+            "-framework",
+            "Foundation",
+            "-framework",
+            "UIKit",
+            "-F\(sdkFrameworkPath)",
+            "-F\(sdkSubFrameworkPath)",
+            "-L\(sdkSwiftLibraryPath)",
+            "-L\(resourceDirectory)/iphoneos",
+            "-rpath",
+            "/usr/lib/swift"
+        ]) else {
+            let message = "NYXIAN_SWIFT_TEST failed to create linker driver."
+            writeLog(message)
+            return message
+        }
+        let linkerJobs = linkDriver.generateJobs().filter { $0.type == .linker }
+        guard let linkerJob = linkerJobs.first else {
+            let message = "NYXIAN_SWIFT_TEST failed to create linker job."
+            writeLog(message)
+            return message
+        }
+
+        var linkDiagnostics: NSArray?
+        guard linkerJob.execute(withOutDiagnostics: &linkDiagnostics) else {
+            let message = """
+            NYXIAN_SWIFT_TEST link failed:
+            args:
+            \(linkerJob.arguments.joined(separator: "\n"))
+            diagnostics:
+            \(formatDiagnostics(linkDiagnostics))
+            """
+            writeLog(message)
+            return message
+        }
+
+        guard signGeneratedExecutable(at: executablePath) else {
+            let message = "NYXIAN_SWIFT_TEST failed signing executable at \(executablePath)"
+            writeLog(message)
+            return message
+        }
+
+        let runOutput = runPatchedExecutable(at: executablePath)
         
         let objectExists = fileManager.fileExists(atPath: objectPath)
+        let executableExists = fileManager.fileExists(atPath: executablePath)
         let message = """
         NYXIAN_SWIFT_TEST passed.
         compiler: CoreCompiler Swift frontend
         object: \(objectPath) exists=\(objectExists)
+        executable: \(executablePath) exists=\(executableExists)
+        sdk swift libs: \(sdkSwiftLibraryPath) exists=\(fileManager.fileExists(atPath: sdkSwiftLibraryPath))
+        run exit: \(runOutput.exitCode)
+        run stdout:
+        \(runOutput.stdout)
+        link diagnostics:
+        \(linkDiagnostics ?? [])
         diagnostics:
         \((output as String?) ?? "")
         """
         writeLog(message)
         return message
+    }
+
+    private static func formatDiagnostics(_ diagnostics: NSArray?) -> String {
+        guard let diagnostics else {
+            return ""
+        }
+
+        return diagnostics.compactMap { diagnostic in
+            if let coreDiagnostic = diagnostic as? CCKDiagnostic {
+                return coreDiagnostic.message
+            }
+            return String(describing: diagnostic)
+        }.joined(separator: "\n")
+    }
+
+    private static func signGeneratedExecutable(at executablePath: String) -> Bool {
+        let entitlements = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>get-task-allow</key>
+            <true/>
+        </dict>
+        </plist>
+        """
+        let entitlementData = entitlements.data(using: .utf8) ?? Data()
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.cr4zy.nyxian.swiftprobe"
+        guard ZSigner.adhocSignMachO(atPath: executablePath, bundleId: bundleID, entitlementData: entitlementData) else {
+            return false
+        }
+        let userApplicationEntitlements = PEEntitlement(rawValue:
+            (1 << 0) | (1 << 3) | (1 << 5) | (1 << 7) | (1 << 14) | (1 << 18) | (1 << 19)
+        )
+        return macho_after_sign(executablePath, userApplicationEntitlements) == 0
+    }
+
+    private static func runPatchedExecutable(at executablePath: String) -> (exitCode: Int, stdout: String) {
+        let outputPipe = Pipe()
+        let inputPipe = Pipe()
+        let mapObject = FDMapObject.emptyMap()
+        mapObject?.appendFileDescriptor(inputPipe.fileHandleForReading.fileDescriptor, withMappingToLoc: STDIN_FILENO)
+        mapObject?.appendFileDescriptor(outputPipe.fileHandleForWriting.fileDescriptor, withMappingToLoc: STDOUT_FILENO)
+        mapObject?.appendFileDescriptor(outputPipe.fileHandleForWriting.fileDescriptor, withMappingToLoc: STDERR_FILENO)
+
+        let workingDirectory = (executablePath as NSString).deletingLastPathComponent
+        let items: [String: Any] = [
+            "PEExecutablePath": executablePath,
+            "PEArguments": [executablePath],
+            "PEEnvironment": [
+                "HOME": workingDirectory,
+                "CFFIXED_USER_HOME": workingDirectory,
+                "TMPDIR": workingDirectory
+            ],
+            "PEWorkingDirectory": workingDirectory,
+            "PEMapObject": mapObject as Any
+        ]
+
+        let pid = PEProcessManager.shared().spawnProcess(withItems: items, withKernelSurfaceProcess: NXKernelProcessForSwift())
+        guard pid >= 0,
+              let process = PEProcessManager.shared().process(forProcessIdentifier: pid) else {
+            return (-1, "PEProcessManager failed to spawn \(executablePath)")
+        }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        process.exitingCallback = {
+            semaphore.signal()
+        }
+
+        let didExit = semaphore.wait(timeout: .now() + 15) == .success
+        if !didExit {
+            process.terminate()
+        }
+
+        outputPipe.fileHandleForWriting.closeFile()
+        inputPipe.fileHandleForWriting.closeFile()
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let stdout = String(data: data, encoding: .utf8) ?? ""
+        return (didExit ? 0 : -1, stdout)
     }
 }

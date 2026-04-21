@@ -35,6 +35,7 @@
 
 /* LiveContainer Headers */
 #import <LindChain/LiveContainer/LCUtils.h>
+#import <LindChain/LiveContainer/ZSign/zsigner.h>
 #import <LindChain/LiveContainer/LCMachOUtils.h>
 #import <LindChain/LiveContainer/ZSign/zsigner.h>
 #import <LindChain/ProcEnvironment/Surface/trust.h>
@@ -54,6 +55,11 @@
 #import <LindChain/ProcEnvironment/Utils/klog.h>
 #import <LindChain/ProcEnvironment/Surface/surface.h>
 #import <LindChain/ProcEnvironment/Object/MachOObject.h>
+
+static inline ksurface_proc_t *NXKernelProcessForSwift(void)
+{
+    return kernel_proc_;
+}
 
 bool liveProcessIsAvailable(void);
 

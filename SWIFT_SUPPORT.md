@@ -16,7 +16,7 @@ Nyxian now has a narrow Swift proof-of-concept path:
 - A Swift utility template with one `Main.swift`.
 - A `NYXIAN_SWIFT_TEST=1` launch mode that skips normal UI and tests the embedded Swift frontend path on device.
 - `LLVM-On-iOS/CoreCompiler` embeds Swift frontend support and exposes it through `CCKSwiftCompiler`.
-- The device proof compiles a tiny stdlib-free Swift source into an object file through CoreCompiler.
+- The device proof compiles a tiny Swift source into an object file through CoreCompiler.
 
 ## Device Test Harness
 
@@ -33,8 +33,9 @@ Status as of 2026-04-21:
 
 - Passing on the connected iPhone with `NYXIAN_SWIFT_TEST=1`.
 - Verified output: `SwiftProbe.o exists=true`, diagnostics empty.
-- The proof source uses `-parse-stdlib` and avoids `import Foundation`.
-- Full stdlib/Foundation imports are not done yet because the bundled Swift resource tree lacks matching iOS Swift `.swiftmodule` files.
+- The stdlib-free proof passed with `-parse-stdlib`.
+- A follow-up probe also passed with `import Foundation` by bundling Xcode's iPhoneOS prebuilt `Swift.swiftmodule` and `Foundation.swiftmodule`, then targeting `arm64e-apple-ios17.0`.
+- The Foundation route is still experimental because Xcode module resources are version-specific and increase app signing/install work.
 
 ## LLVM-On-iOS Work
 
@@ -88,10 +89,39 @@ Shared/SwiftToolchain/usr/lib/swift/...
 4. In-process CoreCompiler Swift API: done.
 5. Nyxian single-file Swift object proof: done.
 6. Device deployment with `NYXIAN_SWIFT_TEST=1`: passing for stdlib-free Swift.
-7. Foundation/std/SKD module import support: next.
-8. Multi-file Swift module compilation: pending.
-9. Link/run Swift code in produced apps: pending.
-10. Diagnostics and project UI polish: pending.
+7. Foundation/stdlib/SDK module import proof: passing experimentally with Xcode iPhoneOS prebuilt modules.
+8. Swift executable proof with `main.swift`, `Foundation`, and `UIKit`: in progress.
+9. Multi-file Swift module compilation: pending.
+10. Link/run Swift code in produced apps: pending.
+11. Diagnostics and project UI polish: pending.
+
+## 2026-04-21 Findings
+
+- Running `swiftc` or `swift-frontend` as an iOS subprocess is not viable. The Swift compiler path must stay inside CoreCompiler and be invoked through Swift compiler APIs.
+- `LCUtils.signMachO(at:)` is not suitable for generated proof executables without the user certificate password path; it crashed in zsign password handling. The test harness now uses ad-hoc Mach-O signing plus `macho_after_sign`.
+- A Swift executable cannot be loaded with `dlopen` because it is `MH_EXECUTE`. It needs to be launched through Nyxian's process environment.
+- Swift cannot import the `kernel_proc_` macro directly because it expands through structure access. A tiny C bridge helper exposes that value to Swift for PEProcess launching.
+- The generated executable must be created under a PE-readable/bootstrap path, not an arbitrary temporary path.
+- The real Swift project builder is still behind the device proof path. It currently emits duplicate/default Swift flags and inherits C/Kate linker defaults that are wrong for Swift, including `-use-ld=lld`, `-platform_version`, and `-lclang_rt.ios`.
+- For real Swift projects, the builder needs the same proven pieces as the harness: `arm64e-apple-ios...`, SDK framework search paths, SDK Swift library path, bundled Swift resource path, and an executable-oriented link path.
+
+## Foundation Support Options
+
+1. Bundle Xcode's iPhoneOS prebuilt modules.
+   - Copy `usr/lib/swift/iphoneos/prebuilt-modules/<sdk-version>` into Nyxian's Swift resource dir.
+   - Compile device Swift as `arm64e-apple-ios...` so the frontend can load the available `.swiftmodule` files instead of SDK `.swiftinterface` files.
+   - This is the fastest working path, but it is Xcode-version-specific and currently increases codesign/install time.
+2. Bundle only the dependency closure needed by common imports.
+   - Start with `Swift`, `Foundation`, `Darwin`, `CoreFoundation`, `ObjectiveC`, `_Concurrency`, and discovered transitive modules.
+   - This should preserve the working behavior while reducing bundle size and codesign cost.
+   - The current `import Foundation` probe passes with only `Swift.swiftmodule` and `Foundation.swiftmodule` from Xcode's `iphoneos/prebuilt-modules/26.0`.
+3. Package Swift modules as an archive and unpack after install.
+   - Store a zip/tar payload as one app resource and extract into `Documents/Toolchains/Swift` during bootstrap.
+   - This reduces app-bundle codesign overhead because thousands of module files are not individually sealed in the app signature.
+4. Build matching iOS Swift modules from the same Swift source revision.
+   - This is cleaner architecturally but significantly more work because stdlib/overlay/Foundation support needs the Swift build graph, SDK overlays, and runtime packaging aligned.
+5. Use SDK `.swiftinterface` files directly.
+   - This is not preferred. The device failed when the compiler tried the SDK interface because the SDK interface version did not match the embedded Swift compiler build.
 
 ## Risks
 
