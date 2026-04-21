@@ -78,21 +78,31 @@ class DebugDatabase: Codable {
     }
     
     static func getDatabase(ofPath path: String) -> DebugDatabase {
+        guard FileManager.default.fileExists(atPath: path) else {
+            return DebugDatabase.empty()
+        }
+
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: path))
             let decoder = JSONDecoder()
             let blob = try decoder.decode(DebugDatabase.self, from: data)
             return blob
         } catch {
-            print("Failed to decode certblob:", error)
-            let debugDatabase: DebugDatabase = DebugDatabase()
-            debugDatabase.debugObjects["Internal"] = DebugObject(title: "Internal", flavour: .Message)
-            return debugDatabase
+            print("Failed to decode debug database:", error)
+            return DebugDatabase.empty()
         }
+    }
+
+    private static func empty() -> DebugDatabase {
+        let debugDatabase = DebugDatabase()
+        debugDatabase.debugObjects["Internal"] = DebugObject(title: "Internal", flavour: .Message)
+        return debugDatabase
     }
     
     func saveDatabase(toPath path: String) {
         do {
+            let directoryPath = (path as NSString).deletingLastPathComponent
+            try FileManager.default.createDirectory(atPath: directoryPath, withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
             if let jsonData = try? encoder.encode(self) {
