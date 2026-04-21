@@ -545,7 +545,7 @@ class Builder: NSObject, CCKDriverDelegate {
                     if result {
                         do {
                             try LDEApplicationWorkspace.shared().installApplication(atBundlePath: project.bundlePath)
-                            DispatchQueue.main.async {
+                            let launchApplication = {
                                 var mapObject: FDMapObject? = nil
 
                                 if let inPipe = inPipe,
@@ -572,7 +572,15 @@ class Builder: NSObject, CCKDriverDelegate {
                                     mapObject?.appendFileDescriptor(outPipe.fileHandleForReading.fileDescriptor, withMappingToLoc: 101)
                                 }
 
-                                PEProcessManager.shared().spawnProcess(withBundleIdentifier: self.project.projectConfig.bundleid, withItems: (mapObject != nil) ? ["PEMapObject":mapObject!] : [:], withKernelSurfaceProcess: nil, doRestartIfRunning: true)
+                                let pid = PEProcessManager.shared().spawnProcess(withBundleIdentifier: self.project.projectConfig.bundleid, withItems: (mapObject != nil) ? ["PEMapObject":mapObject!] : [:], withKernelSurfaceProcess: nil, doRestartIfRunning: true)
+                                if pid < 0 {
+                                    nsError = NSError(domain: "com.cr4zy.nyxian.builder.install", code: 1, userInfo: [NSLocalizedDescriptionKey:"Failed to launch application"])
+                                }
+                            }
+                            if Thread.isMainThread {
+                                launchApplication()
+                            } else {
+                                DispatchQueue.main.sync(execute: launchApplication)
                             }
                         } catch {
                             nsError = error as NSError
@@ -780,22 +788,29 @@ func buildProjectWithArgumentUI(targetViewController: UIViewController,
             activeProjectBuilds.remove(project.path)
             activeProjectBuildsLock.unlock()
 
-            targetViewController.navigationItem.setRightBarButtonItems(oldBarButtons, animated: true)
-            targetViewController.navigationItem.setHidesBackButton(oldHidesBackButton, animated: true)
-            targetViewController.navigationController?.navigationBar.isUserInteractionEnabled = oldNavigationBarInteraction
-            targetViewController.navigationItem.titleView?.isUserInteractionEnabled = oldTitleViewInteraction
+            let restoreBuildUI = {
+                targetViewController.navigationItem.setRightBarButtonItems(oldBarButtons, animated: true)
+                targetViewController.navigationItem.setHidesBackButton(oldHidesBackButton, animated: true)
+                targetViewController.navigationController?.navigationBar.isUserInteractionEnabled = oldNavigationBarInteraction
+                targetViewController.navigationItem.titleView?.isUserInteractionEnabled = oldTitleViewInteraction
+                completion()
+            }
 
             if !result {
+                restoreBuildUI()
                 let loggerView = UINavigationController(rootViewController: UIDebugViewController(project: project))
                 loggerView.modalPresentationStyle = .formSheet
                 targetViewController.present(loggerView, animated: true)
             } else if buildType == .InstallPackagedApp {
+                restoreBuildUI()
                 share(url: URL(fileURLWithPath: project.packagePath), remove: true)
             } else {
-                NotificationServer.NotifyUser(level: .note, notification: "Build succeeded.")
+                XCButton.updateProgress(withValue: 1.0)
+                XCButton.switchImage(withSystemName: "checkmark", animated: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    restoreBuildUI()
+                }
             }
-
-            completion()
         }
     }
 }
