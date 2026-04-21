@@ -28,7 +28,8 @@
 @protocol LDEApplicationWorkspaceProxyProtocol
 
 - (void)ping;
-- (void)installApplicationWithArchiveObject:(ArchiveObject*)archiveObject withReply:(void (^)(BOOL))reply;
+- (void)installApplicationWithArchiveObject:(ArchiveObject*)archiveObject withReply:(void (^)(BOOL))reply __attribute__((deprecated("Use installApplicationWithArchiveObject:withErrorReply: instead")));
+- (void)installApplicationWithArchiveObject:(ArchiveObject*)archiveObject withErrorReply:(void (^)(NSError*))reply;
 - (void)deleteApplicationWithBundleID:(NSString*)bundleID withReply:(void (^)(BOOL))reply;
 - (void)applicationInstalledWithBundleID:(NSString*)bundleID withReply:(void (^)(BOOL))reply;
 - (void)applicationObjectForBundleID:(NSString*)bundleID withReply:(void (^)(LDEApplicationObject*))reply;

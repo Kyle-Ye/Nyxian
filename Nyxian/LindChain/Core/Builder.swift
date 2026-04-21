@@ -540,7 +540,8 @@ class Builder: NSObject, CCKDriverDelegate {
                     guard let self = self else { return }
                     macho_after_sign(self.project.machoPath, self.project.entitlementsConfig.entitlement)
                     if result {
-                        if LDEApplicationWorkspace.shared().installApplication(atBundlePath: project.bundlePath) {
+                        do {
+                            try LDEApplicationWorkspace.shared().installApplication(atBundlePath: project.bundlePath)
                             DispatchQueue.main.async {
                                 var mapObject: FDMapObject? = nil
 
@@ -570,8 +571,8 @@ class Builder: NSObject, CCKDriverDelegate {
 
                                 PEProcessManager.shared().spawnProcess(withBundleIdentifier: self.project.projectConfig.bundleid, withItems: (mapObject != nil) ? ["PEMapObject":mapObject!] : [:], withKernelSurfaceProcess: nil, doRestartIfRunning: true)
                             }
-                        } else {
-                            nsError = NSError(domain: "com.cr4zy.nyxian.builder.install", code: 1, userInfo: [NSLocalizedDescriptionKey:"Failed to install application"])
+                        } catch {
+                            nsError = error as NSError
                         }
                     } else {
                         nsError = NSError(domain: "com.cr4zy.nyxian.builder.install", code: 1, userInfo: [NSLocalizedDescriptionKey:error?.localizedDescription ?? "Unknown error happened signing application"])

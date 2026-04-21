@@ -35,8 +35,10 @@
 + (instancetype)shared;
 
 - (void)ping;
-- (BOOL)installApplicationAtBundlePath:(NSString*)bundlePath;
-- (BOOL)installApplicationAtPackagePath:(NSString*)packagePath;
+- (BOOL)installApplicationAtBundlePath:(NSString*)bundlePath __attribute__((deprecated("Use installApplicationAtBundlePath:error: instead")));
+- (BOOL)installApplicationAtBundlePath:(NSString*)bundlePath error:(NSError**)error;
+- (BOOL)installApplicationAtPackagePath:(NSString*)packagePath __attribute__((deprecated("Use installApplicationAtPackagePath:error: instead")));
+- (BOOL)installApplicationAtPackagePath:(NSString*)packagePath error:(NSError**)error;
 - (BOOL)deleteApplicationWithBundleID:(NSString*)bundleID;
 - (BOOL)applicationInstalledWithBundleID:(NSString*)bundleID;
 - (LDEApplicationObject*)applicationObjectForBundleID:(NSString*)bundleID;

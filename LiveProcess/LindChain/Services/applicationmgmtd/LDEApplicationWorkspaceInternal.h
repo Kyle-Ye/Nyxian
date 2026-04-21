@@ -35,12 +35,14 @@
 - (instancetype)init;
 + (LDEApplicationWorkspaceInternal*)shared;
 
-- (BOOL)installApplicationWithPayloadPath:(NSString*)bundlePath;
+- (BOOL)installApplicationWithPayloadPath:(NSString*)bundlePath __attribute__((deprecated("Use installApplicationWithPayloadPath:error: instead")));
+- (BOOL)installApplicationWithPayloadPath:(NSString*)bundlePath error:(NSError**)error;
 - (BOOL)deleteApplicationWithBundleID:(NSString*)bundleID;
 - (BOOL)applicationInstalledWithBundleID:(NSString*)bundleID;
 - (NSBundle*)applicationBundleForBundleID:(NSString*)bundleID;
 - (NSURL*)applicationContainerForBundleID:(NSString *)bundleID;
-- (BOOL)doWeTrustThatBundle:(NSBundle*)bundle;
+- (BOOL)doWeTrustThatBundle:(NSBundle*)bundle __attribute__((deprecated("Use doWeTrustThatBundle:error: instead")));
+- (BOOL)doWeTrustThatBundle:(NSBundle*)bundle error:(NSError**)error;
 - (BOOL)clearContainerForBundleID:(NSString*)bundleID;
 
 @end

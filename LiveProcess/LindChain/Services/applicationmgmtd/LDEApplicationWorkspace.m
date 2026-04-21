@@ -90,62 +90,100 @@
 
 - (BOOL)installApplicationAtBundlePath:(NSString*)bundlePath
 {
+    return [self installApplicationAtBundlePath:bundlePath error:nil];
+}
+
+- (BOOL)installApplicationAtBundlePath:(NSString*)bundlePath error:(NSError**)error
+{
     [self connect];
     
-    __block BOOL result = NO;
+    __block NSError *installError = nil;
     ArchiveObject *archiveObject = [ArchiveObject objectForDirectoryAtPath:bundlePath];
     dispatch_semaphore_t sema = dispatch_semaphore_create(0);
     
-    id proxy = [_connection remoteObjectProxyWithErrorHandler:^(NSError *error) {
+    id proxy = [_connection remoteObjectProxyWithErrorHandler:^(NSError *remoteError) {
+        installError = remoteError;
         /* semaphores remember the signal, it doesnt have to catch them in time */
         dispatch_semaphore_signal(sema);
     }];
     
     if(proxy == NULL)
     {
+        installError = [NSError errorWithDomain:@"com.cr4zy.nyxian.installd"
+                                           code:1
+                                       userInfo:@{NSLocalizedDescriptionKey: @"Unable to connect to installd"}];
         /* semaphores remember the signal, it doesnt have to catch them in time */
         dispatch_semaphore_signal(sema);
     }
     else
     {
-        [proxy installApplicationWithArchiveObject:archiveObject withReply:^(BOOL replyResult){
-            result = replyResult;
+        [proxy installApplicationWithArchiveObject:archiveObject withErrorReply:^(NSError *replyError){
+            installError = replyError;
             dispatch_semaphore_signal(sema);
         }];
     }
     
-    dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)));
-    return result;
+    long waitResult = dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)));
+    if(waitResult != 0 && installError == nil)
+    {
+        installError = [NSError errorWithDomain:@"com.cr4zy.nyxian.installd"
+                                           code:1
+                                       userInfo:@{NSLocalizedDescriptionKey: @"Timed out waiting for installd"}];
+    }
+    if(error != NULL)
+    {
+        *error = installError;
+    }
+    return installError == nil;
 }
 
 - (BOOL)installApplicationAtPackagePath:(NSString*)packagePath
 {
+    return [self installApplicationAtPackagePath:packagePath error:nil];
+}
+
+- (BOOL)installApplicationAtPackagePath:(NSString*)packagePath error:(NSError**)error
+{
     [self connect];
     
-    __block BOOL result = NO;
+    __block NSError *installError = nil;
     ArchiveObject *archiveObject = [ArchiveObject objectForFileAtPath:packagePath];
     dispatch_semaphore_t sema = dispatch_semaphore_create(0);
     
-    id proxy = [_connection remoteObjectProxyWithErrorHandler:^(NSError *error) {
+    id proxy = [_connection remoteObjectProxyWithErrorHandler:^(NSError *remoteError) {
+        installError = remoteError;
         /* semaphores remember the signal, it doesnt have to catch them in time */
         dispatch_semaphore_signal(sema);
     }];
     
     if(proxy == NULL)
     {
+        installError = [NSError errorWithDomain:@"com.cr4zy.nyxian.installd"
+                                           code:1
+                                       userInfo:@{NSLocalizedDescriptionKey: @"Unable to connect to installd"}];
         /* semaphores remember the signal, it doesnt have to catch them in time */
         dispatch_semaphore_signal(sema);
     }
     else
     {
-        [proxy installApplicationWithArchiveObject:archiveObject withReply:^(BOOL replyResult){
-            result = replyResult;
+        [proxy installApplicationWithArchiveObject:archiveObject withErrorReply:^(NSError *replyError){
+            installError = replyError;
             dispatch_semaphore_signal(sema);
         }];
     }
     
-    dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)));
-    return result;
+    long waitResult = dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)));
+    if(waitResult != 0 && installError == nil)
+    {
+        installError = [NSError errorWithDomain:@"com.cr4zy.nyxian.installd"
+                                           code:1
+                                       userInfo:@{NSLocalizedDescriptionKey: @"Timed out waiting for installd"}];
+    }
+    if(error != NULL)
+    {
+        *error = installError;
+    }
+    return installError == nil;
 }
 
 - (BOOL)deleteApplicationWithBundleID:(NSString *)bundleID

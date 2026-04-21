@@ -41,6 +41,18 @@ bool checkCodeSignature(const char* path);
 
 @implementation LDEApplicationWorkspaceInternal
 
+static NSString * const LDEInstallErrorDomain = @"com.cr4zy.nyxian.installd";
+
+static void LDESetInstallError(NSError **error, NSInteger code, NSString *message)
+{
+    if(error != NULL)
+    {
+        *error = [NSError errorWithDomain:LDEInstallErrorDomain
+                                     code:code
+                                 userInfo:@{NSLocalizedDescriptionKey: message ?: @"Failed to install application"}];
+    }
+}
+
 - (instancetype)init
 {
     self = [super init];
@@ -121,6 +133,11 @@ bool checkCodeSignature(const char* path);
  */
 - (BOOL)doWeTrustThatBundle:(NSBundle*)bundle
 {
+    return [self doWeTrustThatBundle:bundle error:nil];
+}
+
+- (BOOL)doWeTrustThatBundle:(NSBundle*)bundle error:(NSError**)error
+{
     /*
      * checking for obvious thing lol, and checking for
      * info dictionary, every iOS app needs to have one.
@@ -128,6 +145,7 @@ bool checkCodeSignature(const char* path);
     if(bundle == nil ||
        bundle.infoDictionary == nil)
     {
+        LDESetInstallError(error, 100, @"Invalid app bundle: missing Info.plist");
         return NO;
     }
     
@@ -135,6 +153,7 @@ bool checkCodeSignature(const char* path);
     if(bundle.infoDictionary[@"CFBundleExecutable"] == nil ||
        bundle.infoDictionary[@"CFBundleIdentifier"] == nil)
     {
+        LDESetInstallError(error, 101, @"Invalid app bundle: missing CFBundleExecutable or CFBundleIdentifier");
         return NO;
     }
     
@@ -142,6 +161,7 @@ bool checkCodeSignature(const char* path);
     if(![bundle.infoDictionary[@"CFBundleExecutable"] isKindOfClass:[NSString class]] ||
        ![bundle.infoDictionary[@"CFBundleIdentifier"] isKindOfClass:[NSString class]])
     {
+        LDESetInstallError(error, 102, @"Invalid app bundle: CFBundleExecutable and CFBundleIdentifier must be strings");
         return NO;
     }
     
@@ -157,12 +177,14 @@ bool checkCodeSignature(const char* path);
        ![executableName isEqualToString:lastPathComponent] ||
        ![[NSFileManager defaultManager] isReadableFileAtPath:bundle.executablePath])
     {
+        LDESetInstallError(error, 103, [NSString stringWithFormat:@"Invalid app bundle: executable '%@' is missing or unreadable", executableName]);
         return NO;
     }
     
     /* code signature check */
     if(!checkCodeSignature([bundle.executablePath UTF8String]))
     {
+        LDESetInstallError(error, 104, @"Invalid app bundle: executable code signature check failed");
         return NO;
     }
     
@@ -171,6 +193,7 @@ bool checkCodeSignature(const char* path);
 
     if(regex == nil)
     {
+        LDESetInstallError(error, 105, @"Internal installer error: failed to create bundle identifier validator");
         return NO;
     }
 
@@ -178,21 +201,27 @@ bool checkCodeSignature(const char* path);
 
     if(matches == 0)
     {
+        LDESetInstallError(error, 106, [NSString stringWithFormat:@"Invalid app bundle: bundle identifier '%@' is not valid", bundleIdentifier]);
         return NO;
     }
     
     /* minimum version validation */
-    if(bundle.infoDictionary[@"MinimumOSVersion"] == nil &&
-       ![bundle.infoDictionary[@"MinimumOSVersion"] isKindOfClass:[NSString class]])
+    if(bundle.infoDictionary[@"MinimumOSVersion"] == nil)
     {
         /* some apps like cocoatop dont have that key */
         return YES;
+    }
+    if(![bundle.infoDictionary[@"MinimumOSVersion"] isKindOfClass:[NSString class]])
+    {
+        LDESetInstallError(error, 107, @"Invalid app bundle: MinimumOSVersion must be a string");
+        return NO;
     }
     
     NSArray *components = [minimumVersion componentsSeparatedByString:@"."];
     
     if(components == nil)
     {
+        LDESetInstallError(error, 107, [NSString stringWithFormat:@"Invalid app bundle: MinimumOSVersion '%@' is not valid", minimumVersion]);
         return NO;
     }
     
@@ -204,6 +233,7 @@ bool checkCodeSignature(const char* path);
 
     if(![[NSProcessInfo processInfo] isOperatingSystemAtLeastVersion:requiredVersion])
     {
+        LDESetInstallError(error, 108, [NSString stringWithFormat:@"Invalid app bundle: MinimumOSVersion %@ is newer than this device", minimumVersion]);
         return NO;
     }
     
@@ -211,6 +241,11 @@ bool checkCodeSignature(const char* path);
 }
 
 - (BOOL)installApplicationWithPayloadPath:(NSString*)payloadPath
+{
+    return [self installApplicationWithPayloadPath:payloadPath error:nil];
+}
+
+- (BOOL)installApplicationWithPayloadPath:(NSString*)payloadPath error:(NSError**)error
 {
     /* finding installable application bundle in the path */
     NSBundle *bundle = nil;
@@ -229,11 +264,12 @@ bool checkCodeSignature(const char* path);
     /* bundle validation */
     if(!bundle)
     {
+        LDESetInstallError(error, 200, @"No .app bundle found in install payload");
         return NO;
     }
     
     /* next bundle validation */
-    if(![self doWeTrustThatBundle:bundle])
+    if(![self doWeTrustThatBundle:bundle error:error])
     {
         return NO;
     }
@@ -257,9 +293,16 @@ bool checkCodeSignature(const char* path);
     }
     
     /* install it at location */
-    if(![fileManager createDirectoryAtURL:[installURL URLByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil] ||
-       ![fileManager moveItemAtURL:bundle.bundleURL toURL:installURL error:nil])
+    NSError *fileError = nil;
+    if(![fileManager createDirectoryAtURL:[installURL URLByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:&fileError] ||
+       ![fileManager moveItemAtURL:bundle.bundleURL toURL:installURL error:&fileError])
     {
+        if(error != NULL)
+        {
+            *error = fileError ?: [NSError errorWithDomain:LDEInstallErrorDomain
+                                                      code:201
+                                                  userInfo:@{NSLocalizedDescriptionKey: @"Failed to move app bundle into install location"}];
+        }
         return NO;
     }
     
@@ -269,6 +312,7 @@ bool checkCodeSignature(const char* path);
     /* checking weither bundle is valid */
     if(bundle == nil)
     {
+        LDESetInstallError(error, 202, @"Installed app bundle could not be loaded");
         return NO;
     }
     
@@ -467,10 +511,19 @@ create_home:
 
 - (void)installApplicationWithArchiveObject:(ArchiveObject*)archiveObject
                                   withReply:(void (^)(BOOL))reply {
+    [self installApplicationWithArchiveObject:archiveObject withErrorReply:^(NSError *error) {
+        reply(error == nil);
+    }];
+}
+
+- (void)installApplicationWithArchiveObject:(ArchiveObject*)archiveObject
+                             withErrorReply:(void (^)(NSError*))reply {
     /* validate object*/
     if(archiveObject == NULL)
     {
-        reply(NO);
+        reply([NSError errorWithDomain:LDEInstallErrorDomain
+                                  code:300
+                              userInfo:@{NSLocalizedDescriptionKey: @"Install payload archive could not be created"}]);
         return;
     }
     
@@ -478,24 +531,32 @@ create_home:
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSFileManager *fileManager = [NSFileManager defaultManager];
         NSString *tempBundle = nil;
-        BOOL didInstall = NO;
+        NSError *installError = nil;
         
         @try {
             tempBundle = [archiveObject extractArchive];
             if(tempBundle != NULL)
             {
-                didInstall = [[LDEApplicationWorkspaceInternal shared]
-                              installApplicationWithPayloadPath:tempBundle];
+                [[LDEApplicationWorkspaceInternal shared]
+                 installApplicationWithPayloadPath:tempBundle error:&installError];
+            }
+            else
+            {
+                installError = [NSError errorWithDomain:LDEInstallErrorDomain
+                                                   code:301
+                                               userInfo:@{NSLocalizedDescriptionKey: @"Install payload archive could not be extracted"}];
             }
         } @catch (NSException *exception) {
             NSLog(@"[installd] Exception during install: %@", exception);
-            didInstall = NO;
+            installError = [NSError errorWithDomain:LDEInstallErrorDomain
+                                               code:302
+                                           userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Install failed with exception: %@", exception.reason ?: exception.name]}];
         } @finally {
             if(tempBundle != NULL)
             {
                 [fileManager removeItemAtPath:tempBundle error:nil];
             }
-            reply(didInstall);
+            reply(installError);
         }
     });
 }

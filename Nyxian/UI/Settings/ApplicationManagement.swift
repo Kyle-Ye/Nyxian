@@ -359,7 +359,8 @@ class ApplicationManagementViewController: UIThemedTableViewController, UITextFi
                                         entitlement_set_path((executablePath as NSString).utf8String, ent)
                                     }
                                     
-                                    if LDEApplicationWorkspace.shared().installApplication(atBundlePath: bundle.bundleURL.path) {
+                                    do {
+                                        try LDEApplicationWorkspace.shared().installApplication(atBundlePath: bundle.bundleURL.path)
                                         DispatchQueue.main.async {
                                             alert.dismiss(animated: true) {
                                                 PEProcessManager.shared().spawnProcess(
@@ -370,10 +371,10 @@ class ApplicationManagementViewController: UIThemedTableViewController, UITextFi
                                                 )
                                             }
                                         }
-                                    } else {
+                                    } catch {
                                         DispatchQueue.main.async {
                                             alert.dismiss(animated: true) {
-                                                NotificationServer.NotifyUser(level: .error, notification: "Failed to sign or install application.")
+                                                NotificationServer.NotifyUser(level: .error, notification: "Failed to install application: \(error.localizedDescription)")
                                             }
                                         }
                                     }

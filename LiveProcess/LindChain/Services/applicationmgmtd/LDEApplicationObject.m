@@ -43,7 +43,7 @@
         localizedDisplayName = [bundle objectForInfoDictionaryKey:@"CFBundleName"];
     }
     self.localizedName = NSLocalizedStringFromTableInBundle(localizedDisplayName, @"InfoPlist", bundle, localizedDisplayName);
-    self.isLaunchAllowed = [[LDEApplicationWorkspaceInternal shared] doWeTrustThatBundle:bundle];
+    self.isLaunchAllowed = [[LDEApplicationWorkspaceInternal shared] doWeTrustThatBundle:bundle error:nil];
     if(self.isLaunchAllowed)
     {
         self.bundlePath = [[bundle bundleURL] path];
