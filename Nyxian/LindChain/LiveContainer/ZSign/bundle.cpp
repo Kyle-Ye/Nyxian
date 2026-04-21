@@ -39,9 +39,6 @@ bool ZBundle::FindAppFolder(const string& strFolder, string& strAppFolder)
 	return (!strAppFolder.empty());
 }
 
-extern "C" const char *getExecutablePath(void);
-extern "C" const char *getBundleIdentifier(void);
-
 bool ZBundle::GetSignFolderInfo(const string& strFolder, jvalue& jvNode, bool bGetName)
 {
 	string strInfoPlistData;
@@ -50,10 +47,11 @@ bool ZBundle::GetSignFolderInfo(const string& strFolder, jvalue& jvNode, bool bG
 
 	jvalue jvInfo;
 	jvInfo.read_plist(strInfoPlistData);
-    jvInfo["CFBundleExecutable"] = getExecutablePath();
-    jvInfo["CFBundleIdentifier"] = getBundleIdentifier();
 	string strBundleId = jvInfo["CFBundleIdentifier"];
 	string strBundleExe = jvInfo["CFBundleExecutable"];
+	if (strBundleExe.find('/') != string::npos) {
+		strBundleExe = ZUtil::GetBaseName(strBundleExe.c_str());
+	}
 	string strBundleVersion = jvInfo["CFBundleVersion"];
 	if (strBundleId.empty() || strBundleExe.empty()) {
 		return false;
