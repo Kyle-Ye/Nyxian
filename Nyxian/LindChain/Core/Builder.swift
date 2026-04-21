@@ -125,7 +125,7 @@ class Builder: NSObject, CCKDriverDelegate {
 
     private static func swiftTargetTriple(project: NXProject) -> String {
         let minimumVersion = project.projectConfig.deploymentTarget ?? "17.0"
-        return "arm64e-apple-ios\(minimumVersion)"
+        return "arm64-apple-ios\(minimumVersion)"
     }
 
     private static func swiftResourceDirectory() -> String {

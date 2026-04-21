@@ -114,7 +114,8 @@ Shared/SwiftToolchain/usr/lib/swift/...
 - SwiftUI `@main` app sources need `-parse-as-library`; without it, the compiler rejects `@main` with a top-level-code diagnostic.
 - The local SwiftUI module-resource closure currently includes `SwiftUI`, `SwiftUICore`, `Combine`, `Observation`, `DeveloperToolsSupport`, and `Spatial` from Xcode's iPhoneOS prebuilt modules.
 - Nyxian itself builds, installs, and launches on the connected iPhone with the SwiftUI template changes.
-- Host-side validation with Nyxian's bundled Swift resource dir still exposes a Clang module mismatch around `Spatial`/`simd`. The next meaningful validation is creating a real SwiftUI app project in Nyxian and compiling through CoreCompiler on device.
+- The first real SwiftUI project compile reached the linker and then crashed in LLD while parsing relocation type 11 from an `arm64e` object `__DATA,__auth_ptr` section. Swift project output is now forced to plain `arm64` until CoreCompiler's LLD supports authenticated-pointer relocations.
+- Host-side validation with Nyxian's bundled Swift resource dir still exposes a Clang module mismatch around `Spatial`/`simd`. The next meaningful validation is recreating the SwiftUI app compile through CoreCompiler on device after the `arm64` target change.
 
 ## Foundation Support Options
 
