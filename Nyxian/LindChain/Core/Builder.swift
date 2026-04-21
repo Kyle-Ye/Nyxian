@@ -134,9 +134,11 @@ class Builder: NSObject, CCKDriverDelegate {
 
     private static func swiftRuntimeLinkerFlags(project: NXProject) -> [String] {
         return [
+            "-L\(Bootstrap.shared.bootstrapPath("/lib"))",
             "-L\(Bootstrap.shared.sdkPath)/usr/lib/swift",
             "-L\(Bootstrap.shared.bootstrapPath("/Toolchains/Swift/usr/lib/swift/iphoneos"))",
             "-L\(swiftResourceDirectory())/iphoneos",
+            "-lclang_rt.ios",
             "-rpath",
             "/usr/lib/swift"
         ]
@@ -430,17 +432,15 @@ class Builder: NSObject, CCKDriverDelegate {
             return
         }
 
-        guard self.swiftSourceFiles.count == 1,
-              let swiftSourceFile = self.swiftSourceFiles.first,
-              let swiftObjectFile = self.swiftObjectFiles.first else {
-            throw NSError(domain: "com.cr4zy.nyxian.builder.swift", code: 1, userInfo: [NSLocalizedDescriptionKey:"Swift proof-of-concept currently supports exactly one Swift source file."])
+        guard let swiftObjectFile = self.swiftObjectFiles.first else {
+            throw NSError(domain: "com.cr4zy.nyxian.builder.swift", code: 1, userInfo: [NSLocalizedDescriptionKey:"Swift build did not prepare an object output path."])
         }
 
         let swiftModuleName = self.project.projectConfig.swiftModuleName ?? self.project.projectConfig.executable ?? "SwiftModule"
         let swiftResourceDirectory = Builder.swiftResourceDirectory()
         let swiftBuildDirectory = (swiftObjectFile as NSString).deletingLastPathComponent
         let swiftModuleCachePath = swiftBuildDirectory + "/SwiftModuleCache"
-        let compileSourceFile = try normalizedSwiftExecutableSource(swiftSourceFile, buildDirectory: swiftBuildDirectory)
+        let compileSourceFiles = try normalizedSwiftExecutableSources(self.swiftSourceFiles, buildDirectory: swiftBuildDirectory)
 
         guard FileManager.default.fileExists(atPath: swiftResourceDirectory) else {
             throw NSError(domain: "com.cr4zy.nyxian.builder.swift", code: 1, userInfo: [NSLocalizedDescriptionKey:"Swift resource directory is missing at \(swiftResourceDirectory)"])
@@ -448,8 +448,6 @@ class Builder: NSObject, CCKDriverDelegate {
 
         var arguments: [String] = [
             "-c",
-            "-primary-file",
-            compileSourceFile,
             "-target",
             Builder.swiftTargetTriple(project: self.project),
             "-Xllvm",
@@ -465,6 +463,10 @@ class Builder: NSObject, CCKDriverDelegate {
             "-Xcc",
             "-fno-color-diagnostics"
         ]
+        arguments.append(contentsOf: compileSourceFiles)
+        if compileSourceFiles.count > 1 {
+            arguments.append("-whole-module-optimization")
+        }
         arguments.append(contentsOf: Builder.sanitizedSwiftCompilerFlags(self.project.projectConfig.swiftCompilerFlags ?? []))
         arguments.append(contentsOf: [
             "-module-name",
@@ -494,17 +496,20 @@ class Builder: NSObject, CCKDriverDelegate {
         }
     }
 
-    private func normalizedSwiftExecutableSource(_ sourceFile: String, buildDirectory: String) throws -> String {
+    private func normalizedSwiftExecutableSources(_ sourceFiles: [String], buildDirectory: String) throws -> [String] {
         try FileManager.default.createDirectory(atPath: buildDirectory, withIntermediateDirectories: true)
 
-        if (sourceFile as NSString).lastPathComponent == "main.swift" {
-            return sourceFile
+        let sortedSourceFiles = sourceFiles.sorted()
+        guard sortedSourceFiles.count == 1,
+              let sourceFile = sortedSourceFiles.first,
+              (sourceFile as NSString).lastPathComponent != "main.swift" else {
+            return sortedSourceFiles
         }
 
         let mainSourceFile = "\(buildDirectory)/main.swift"
         try? FileManager.default.removeItem(atPath: mainSourceFile)
         try FileManager.default.copyItem(atPath: sourceFile, toPath: mainSourceFile)
-        return mainSourceFile
+        return [mainSourceFile]
     }
 
     func link() throws {

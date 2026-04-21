@@ -110,8 +110,10 @@ Shared/SwiftToolchain/usr/lib/swift/...
 - `BB`, a newly created Swift utility project, now builds and runs inside Nyxian with `main.swift`, `Foundation`, and `UIKit`.
 - Swift-only linker job generation needed a placeholder object path before `CCKDriver.generateJobs()`. Without it, the linker job could omit the Swift object because `compileSwift()` had not produced it yet, causing `undefined symbol: main`.
 - New Swift projects use lowercase `main.swift`; existing single-file projects with different casing are normalized through a cache-side `main.swift` copy during compilation.
-- SwiftUI app creation is now exposed under App -> SwiftUI and writes `Application/SwiftUI/main.swift`.
+- SwiftUI app creation is now exposed under App -> SwiftUI and writes `Application/SwiftUI/App.swift` plus `Application/SwiftUI/ContentView.swift`.
 - SwiftUI `@main` app sources need `-parse-as-library`; without it, the compiler rejects `@main` with a top-level-code diagnostic.
+- Swift project compilation now accepts multiple Swift files by compiling them as one whole module object before handing that object to the existing linker path.
+- Swift links include Nyxian's bootstrap `libclang_rt.ios` now. SwiftUI can emit calls to `__isPlatformVersionAtLeast`, and that symbol is supplied by compiler-rt builtins rather than UIKit/SwiftUI.
 - The local SwiftUI module-resource closure currently includes `SwiftUI`, `SwiftUICore`, `Combine`, `Observation`, `DeveloperToolsSupport`, and `Spatial` from Xcode's iPhoneOS prebuilt modules.
 - Nyxian itself builds, installs, and launches on the connected iPhone with the SwiftUI template changes.
 - The first real SwiftUI project compile reached the linker and then crashed in LLD while parsing relocation type 11 from an `arm64e` object `__DATA,__auth_ptr` section. Swift project output is now forced to plain `arm64` until CoreCompiler's LLD supports authenticated-pointer relocations.
