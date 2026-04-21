@@ -307,25 +307,37 @@ class Builder: NSObject, CCKDriverDelegate {
             throw NSError(domain: "com.cr4zy.nyxian.builder.swift", code: 1, userInfo: [NSLocalizedDescriptionKey:"Swift proof-of-concept currently supports exactly one Swift source file."])
         }
         
-        let swiftCompiler = self.project.projectConfig.swiftCompilerPath ?? "\(Bootstrap.shared.bootstrapPath("/"))/Toolchains/Swift/usr/bin/swiftc"
         let swiftModuleName = self.project.projectConfig.swiftModuleName ?? self.project.projectConfig.executable ?? "SwiftModule"
-        let swiftModuleDirectory = "\(self.project.cachePath!)/Swift"
-        let swiftModulePath = "\(swiftModuleDirectory)/\(swiftModuleName).swiftmodule"
+        let swiftResourceDirectory = "\(Bundle.main.bundlePath)/Shared/SwiftToolchain/usr/lib/swift"
+        let swiftModuleCachePath = (swiftObjectFile as NSString).deletingLastPathComponent + "/SwiftModuleCache"
         
-        try FileManager.default.createDirectory(atPath: swiftModuleDirectory, withIntermediateDirectories: true)
+        guard FileManager.default.fileExists(atPath: swiftResourceDirectory) else {
+            throw NSError(domain: "com.cr4zy.nyxian.builder.swift", code: 1, userInfo: [NSLocalizedDescriptionKey:"Swift resource directory is missing at \(swiftResourceDirectory)"])
+        }
         
         var arguments: [String] = [
-            swiftCompiler,
-            swiftSourceFile
+            "-c",
+            "-primary-file",
+            swiftSourceFile,
+            "-target",
+            "arm64-apple-ios\(self.project.projectConfig.platformMinimumVersion ?? "17.0")",
+            "-Xllvm",
+            "-aarch64-use-tbi",
+            "-enable-objc-interop",
+            "-sdk",
+            Bootstrap.shared.sdkPath,
+            "-resource-dir",
+            swiftResourceDirectory,
+            "-module-cache-path",
+            swiftModuleCachePath,
+            "-no-color-diagnostics",
+            "-Xcc",
+            "-fno-color-diagnostics"
         ]
         arguments.append(contentsOf: self.project.projectConfig.swiftCompilerFlags ?? [])
         arguments.append(contentsOf: [
             "-module-name",
             swiftModuleName,
-            "-emit-object",
-            "-emit-module",
-            "-emit-module-path",
-            swiftModulePath,
             "-o",
             swiftObjectFile
         ])
@@ -336,14 +348,14 @@ class Builder: NSObject, CCKDriverDelegate {
         }
         
         var output: NSString?
-        let status = shell(arguments, 0, self.swiftEnvironment(), &output)
+        let success = CCKSwiftCompiler.execute(withArguments: arguments, output: &output)
         let compilerOutput = (output as String?)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         
-        if status != 0 {
+        if !success {
             if !compilerOutput.isEmpty {
                 self.database.addMessage(message: compilerOutput, title: "Swift Compiler", severity: .error)
             }
-            throw NSError(domain: "com.cr4zy.nyxian.builder.swift", code: Int(status), userInfo: [NSLocalizedDescriptionKey: compilerOutput.isEmpty ? "Swift compilation failed" : compilerOutput])
+            throw NSError(domain: "com.cr4zy.nyxian.builder.swift", code: 1, userInfo: [NSLocalizedDescriptionKey: compilerOutput.isEmpty ? "Swift compilation failed" : compilerOutput])
         }
         
         if !compilerOutput.isEmpty {
