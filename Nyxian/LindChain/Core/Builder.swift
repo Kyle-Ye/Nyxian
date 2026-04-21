@@ -147,6 +147,15 @@ class Builder: NSObject, CCKDriverDelegate {
         ]
     }
 
+    private static func swiftRuntimeLibraryPath() -> String {
+        [
+            "/usr/lib/swift",
+            Bootstrap.shared.bootstrapPath("/Toolchains/Swift/usr/lib/swift/iphoneos"),
+            "\(Bundle.main.bundlePath)/Shared/SwiftToolchain/usr/lib/swift/iphoneos",
+            "\(Bundle.main.bundlePath)/Shared/SwiftToolchain/usr/lib/swift"
+        ].joined(separator: ":")
+    }
+
     private static func swiftLinkerArguments(objectFiles: [String], outputPath: String, project: NXProject) -> [String] {
         var arguments: [String] = [
             "-target",
@@ -572,7 +581,17 @@ class Builder: NSObject, CCKDriverDelegate {
                                     mapObject?.appendFileDescriptor(outPipe.fileHandleForReading.fileDescriptor, withMappingToLoc: 101)
                                 }
 
-                                let pid = PEProcessManager.shared().spawnProcess(withBundleIdentifier: self.project.projectConfig.bundleid, withItems: (mapObject != nil) ? ["PEMapObject":mapObject!] : [:], withKernelSurfaceProcess: nil, doRestartIfRunning: true)
+                                var launchItems: [String: Any] = [:]
+                                if let mapObject = mapObject {
+                                    launchItems["PEMapObject"] = mapObject
+                                }
+                                if !self.swiftSourceFiles.isEmpty {
+                                    launchItems["PEEnvironment"] = [
+                                        "DYLD_LIBRARY_PATH": Builder.swiftRuntimeLibraryPath()
+                                    ]
+                                }
+
+                                let pid = PEProcessManager.shared().spawnProcess(withBundleIdentifier: self.project.projectConfig.bundleid, withItems: launchItems, withKernelSurfaceProcess: nil, doRestartIfRunning: true)
                                 if pid < 0 {
                                     nsError = NSError(domain: "com.cr4zy.nyxian.builder.install", code: 1, userInfo: [NSLocalizedDescriptionKey:"Failed to launch application"])
                                 }

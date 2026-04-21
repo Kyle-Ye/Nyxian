@@ -146,17 +146,23 @@
     
     /* creating process */
     NSMutableDictionary *mutableItems = [items mutableCopy];
-    
+    NSMutableDictionary *environment = [@{
+        @"HOME": applicationObject.containerPath,
+        @"CFFIXED_USER_HOME": applicationObject.containerPath,
+        @"TMPDIR": [applicationObject.containerPath stringByAppendingPathComponent:@"/Tmp"]
+    } mutableCopy];
+    NSDictionary *extraEnvironment = items[@"PEEnvironment"];
+    if([extraEnvironment isKindOfClass:[NSDictionary class]])
+    {
+        [environment addEntriesFromDictionary:extraEnvironment];
+    }
+
     [mutableItems setValuesForKeysWithDictionary:@{
         @"PEExecutablePath": applicationObject.executablePath,
         @"PEArguments": @[
             applicationObject.executablePath
         ],
-        @"PEEnvironment": @{
-            @"HOME": applicationObject.containerPath,
-            @"CFFIXED_USER_HOME": applicationObject.containerPath,
-            @"TMPDIR": [applicationObject.containerPath stringByAppendingPathComponent:@"/Tmp"]
-        },
+        @"PEEnvironment": environment,
         @"PEWorkingDirectory": [applicationObject.containerPath stringByAppendingPathComponent:@"/Documents"]
     }];
     

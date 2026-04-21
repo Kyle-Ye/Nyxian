@@ -179,6 +179,7 @@ int LCBootstrapMain(NSString *executablePath,
     
     if(!appHandle || (uint64_t)appHandle > 0xf00000000000 || dlerr)
     {
+        fprintf(stderr, "LCBootstrap dlopen failed for %s: %s\n", executablePath.fileSystemRepresentation, dlerr ?: "unknown error");
         return 1;
     }
     
