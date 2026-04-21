@@ -23,6 +23,9 @@ import Foundation
 import Combine
 import CoreCompiler
 
+private var activeProjectBuilds = Set<String>()
+private let activeProjectBuildsLock = NSLock()
+
 #if JAILBREAK_ENV
 
 // https://github.com/davidmurray/ios-reversed-headers/blob/b8fd3093e0e72107034792ed65272880820fecd5/BackBoardServices/BackBoardServices.h#L64
@@ -692,6 +695,7 @@ class Builder: NSObject, CCKDriverDelegate {
             guard let builder: Builder = Builder(
                 project: project
             ) else {
+                completion(false)
                 return
             }
 
@@ -747,21 +751,39 @@ func buildProjectWithArgumentUI(targetViewController: UIViewController,
                                 outPipe: Pipe? = nil,
                                 inPipe: Pipe? = nil,
                                 completion: @escaping () -> Void = {}) {
-    targetViewController.navigationItem.titleView?.isUserInteractionEnabled = false
     XCButton.switchImageSync(withSystemName: "hammer.fill", animated: false)
-    guard let oldBarButtons: [UIBarButtonItem] = targetViewController.navigationItem.rightBarButtonItems else { return }
+
+    activeProjectBuildsLock.lock()
+    if activeProjectBuilds.contains(project.path) {
+        activeProjectBuildsLock.unlock()
+        NotificationServer.NotifyUser(level: .warning, notification: "Build already running.")
+        return
+    }
+    activeProjectBuilds.insert(project.path)
+    activeProjectBuildsLock.unlock()
+
+    let oldBarButtons: [UIBarButtonItem]? = targetViewController.navigationItem.rightBarButtonItems
+    let oldHidesBackButton = targetViewController.navigationItem.hidesBackButton
+    let oldNavigationBarInteraction = targetViewController.navigationController?.navigationBar.isUserInteractionEnabled ?? true
+    let oldTitleViewInteraction = targetViewController.navigationItem.titleView?.isUserInteractionEnabled ?? true
 
     let barButton: UIBarButtonItem = UIBarButtonItem(customView: XCButton.shared())
 
+    targetViewController.navigationController?.navigationBar.isUserInteractionEnabled = false
+    targetViewController.navigationItem.titleView?.isUserInteractionEnabled = false
     targetViewController.navigationItem.setRightBarButtonItems([barButton], animated: true)
     targetViewController.navigationItem.setHidesBackButton(true, animated: true)
 
     Builder.buildProject(withProject: project, buildType: buildType, outPipe: outPipe, inPipe: inPipe) { result in
         DispatchQueue.main.async {
+            activeProjectBuildsLock.lock()
+            activeProjectBuilds.remove(project.path)
+            activeProjectBuildsLock.unlock()
+
             targetViewController.navigationItem.setRightBarButtonItems(oldBarButtons, animated: true)
-            targetViewController.navigationItem.setHidesBackButton(false, animated: true)
-            targetViewController.navigationController?.navigationBar.isUserInteractionEnabled = true
-            targetViewController.navigationItem.titleView?.isUserInteractionEnabled = true
+            targetViewController.navigationItem.setHidesBackButton(oldHidesBackButton, animated: true)
+            targetViewController.navigationController?.navigationBar.isUserInteractionEnabled = oldNavigationBarInteraction
+            targetViewController.navigationItem.titleView?.isUserInteractionEnabled = oldTitleViewInteraction
 
             if !result {
                 let loggerView = UINavigationController(rootViewController: UIDebugViewController(project: project))
@@ -769,6 +791,8 @@ func buildProjectWithArgumentUI(targetViewController: UIViewController,
                 targetViewController.present(loggerView, animated: true)
             } else if buildType == .InstallPackagedApp {
                 share(url: URL(fileURLWithPath: project.packagePath), remove: true)
+            } else {
+                NotificationServer.NotifyUser(level: .note, notification: "Build succeeded.")
             }
 
             completion()
