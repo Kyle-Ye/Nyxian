@@ -13,7 +13,7 @@ Nyxian now has a narrow Swift proof-of-concept path:
   - compile Swift source to one object file
   - emit a `.swiftmodule`
   - pass the object into the existing linker flow
-- A Swift utility template with one `Main.swift`.
+- A Swift utility template with one `main.swift`.
 - A `NYXIAN_SWIFT_TEST=1` launch mode that skips normal UI and tests the embedded Swift frontend path on device.
 - `LLVM-On-iOS/CoreCompiler` embeds Swift frontend support and exposes it through `CCKSwiftCompiler`.
 - The device proof compiles a tiny Swift source into an object file through CoreCompiler.
@@ -90,10 +90,12 @@ Shared/SwiftToolchain/usr/lib/swift/...
 5. Nyxian single-file Swift object proof: done.
 6. Device deployment with `NYXIAN_SWIFT_TEST=1`: passing for stdlib-free Swift.
 7. Foundation/stdlib/SDK module import proof: passing experimentally with Xcode iPhoneOS prebuilt modules.
-8. Swift executable proof with `main.swift`, `Foundation`, and `UIKit`: in progress.
-9. Multi-file Swift module compilation: pending.
-10. Link/run Swift code in produced apps: pending.
-11. Diagnostics and project UI polish: pending.
+8. Swift executable proof with `main.swift`, `Foundation`, and `UIKit`: done.
+9. Real Swift utility project build/run in Nyxian: done with project `BB`.
+10. Multi-file Swift module compilation: pending.
+11. SwiftUI app lifecycle template: next.
+12. Link/run Swift code in produced apps: pending.
+13. Diagnostics and project UI polish: pending.
 
 ## 2026-04-21 Findings
 
@@ -104,6 +106,9 @@ Shared/SwiftToolchain/usr/lib/swift/...
 - The generated executable must be created under a PE-readable/bootstrap path, not an arbitrary temporary path.
 - The real Swift project builder is still behind the device proof path. It currently emits duplicate/default Swift flags and inherits C/Kate linker defaults that are wrong for Swift, including `-use-ld=lld`, `-platform_version`, and `-lclang_rt.ios`.
 - For real Swift projects, the builder needs the same proven pieces as the harness: `arm64e-apple-ios...`, SDK framework search paths, SDK Swift library path, bundled Swift resource path, and an executable-oriented link path.
+- `BB`, a newly created Swift utility project, now builds and runs inside Nyxian with `main.swift`, `Foundation`, and `UIKit`.
+- Swift-only linker job generation needed a placeholder object path before `CCKDriver.generateJobs()`. Without it, the linker job could omit the Swift object because `compileSwift()` had not produced it yet, causing `undefined symbol: main`.
+- New Swift projects use lowercase `main.swift`; existing single-file projects with different casing are normalized through a cache-side `main.swift` copy during compilation.
 
 ## Foundation Support Options
 

@@ -117,10 +117,6 @@
         _swiftBridgingHeader = [self readSecureFromKey:@"LDESwiftBridgingHeader" withDefaultValue:@""];
 
         NSArray *swiftCompilerFlags = [self readSecureFromKey:@"LDESwiftCompilerFlags" withDefaultValue:@[
-            @"-target",
-            @"arm64-apple-ios$(LDEMinimumVersion)",
-            @"-sdk",
-            @"$(SDKROOT)",
             @"-swift-version",
             @"5"
         ]];
@@ -279,10 +275,6 @@
                 @"LDELinkerFlags": @[],
                 @"LDESwiftCompilerPath": @"$(BSROOT)/Toolchains/Swift/usr/bin/swiftc",
                 @"LDESwiftCompilerFlags": @[
-                    @"-target",
-                    @"arm64-apple-ios$(LDEMinimumVersion)",
-                    @"-sdk",
-                    @"$(SDKROOT)",
                     @"-swift-version",
                     @"5"
                 ],
@@ -302,10 +294,6 @@
                 @"LDELinkerFlags": NXLinkerFlagsForCodeTemplateLanguage(language),
                 @"LDESwiftCompilerPath": @"$(BSROOT)/Toolchains/Swift/usr/bin/swiftc",
                 @"LDESwiftCompilerFlags": @[
-                    @"-target",
-                    @"arm64-apple-ios$(LDEMinimumVersion)",
-                    @"-sdk",
-                    @"$(SDKROOT)",
                     @"-swift-version",
                     @"5"
                 ],

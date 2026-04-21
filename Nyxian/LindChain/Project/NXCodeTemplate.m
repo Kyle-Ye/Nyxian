@@ -149,19 +149,10 @@ NSArray *NXLinkerFlagsForCodeTemplateLanguage(NXCodeTemplateLanguage language)
     else if([language isEqualToString:NXCodeTemplateLanguageSwift])
     {
         return @[
-            @"-platform_version",
-            @"ios",
-            @"$(LDEMinimumVersion)",
-            @"$(LDEVersion)",
-            @"-arch",
-            @"arm64",
-            @"-syslibroot",
-            @"$(SDKROOT)",
-            @"-L$(BSROOT)/lib",
-            @"-lc",
-            @"-lclang_rt.ios",
             @"-framework",
             @"Foundation",
+            @"-framework",
+            @"UIKit"
         ];
     }
     return nil;
