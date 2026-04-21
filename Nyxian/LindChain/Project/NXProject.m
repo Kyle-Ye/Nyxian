@@ -232,6 +232,27 @@
     };
 
     NSDictionary *projConfigPlist = nil;
+    NSDictionary *appInfoDictionary = [language isEqualToString:NXCodeTemplateLanguageSwiftUI] ? @{} : @{
+        @"UIApplicationSceneManifest": @{
+            @"UIApplicationSupportsMultipleScenes": @(NO),
+            @"UISceneConfigurations": @{
+                @"UIWindowSceneSessionRoleApplication": @[
+                    @{
+                        @"UISceneConfigurationName": @"Default Configuration",
+                        @"UISceneDelegateClassName": @"SceneDelegate"
+                    }
+                ]
+            }
+        }
+    };
+    NSArray *swiftCompilerFlags = [language isEqualToString:NXCodeTemplateLanguageSwiftUI] ? @[
+        @"-swift-version",
+        @"5",
+        @"-parse-as-library"
+    ] : @[
+        @"-swift-version",
+        @"5"
+    ];
     switch(type)
     {
         case NXProjectTypeApp:
@@ -240,44 +261,15 @@
                 @"LDEExecutable": name,
                 @"LDEDisplayName": name,
                 @"LDEBundleIdentifier": bundleid,
-                @"LDEBundleInfo": @{
-                    @"UIApplicationSceneManifest": @{
-                        @"UIApplicationSupportsMultipleScenes": @(NO),
-                        @"UISceneConfigurations": @{
-                            @"UIWindowSceneSessionRoleApplication": @[
-                                @{
-                                    @"UISceneConfigurationName": @"Default Configuration",
-                                    @"UISceneDelegateClassName": @"SceneDelegate"
-                                }
-                            ]
-                        }
-                    }
-                },
+                @"LDEBundleInfo": appInfoDictionary,
                 @"LDEBundleVersion": @"1.0",
                 @"LDEBundleShortVersion": @"1.0",
                 @"LDEProjectType": @(type),
                 @"LDEMinimumVersion": NXOSVersion.hostVersion.pickerVersionString ?: NXOSVersion.maximumBuildVersion.versionString,
-                @"LDECompilerFlags": @[
-                    @"-target",
-                    @"arm64-apple-ios$(LDEMinimumVersion)",
-                    @"-isysroot",
-                    @"$(SDKROOT)",
-                    @"-resource-dir",
-                    @"$(BSROOT)/Include",
-                    @"-L$(BSROOT)/lib",
-                    @"-lclang_rt.ios",
-                    @"-fobjc-arc",
-                    @"-framework",
-                    @"Foundation",
-                    @"-framework",
-                    @"UIKit"
-                ],
-                @"LDELinkerFlags": @[],
+                @"LDECompilerFlags": NXCompilerFlagsForCodeTemplateLanguage(language),
+                @"LDELinkerFlags": NXLinkerFlagsForCodeTemplateLanguage(language),
                 @"LDESwiftCompilerPath": @"$(BSROOT)/Toolchains/Swift/usr/bin/swiftc",
-                @"LDESwiftCompilerFlags": @[
-                    @"-swift-version",
-                    @"5"
-                ],
+                @"LDESwiftCompilerFlags": swiftCompilerFlags,
                 @"LDESwiftModuleName": name,
                 @"LDESwiftBridgingHeader": @"",
                 @"LDEOutputPath": @"$(CACHEROOT)/Payload/$(LDEDisplayName).app/$(LDEExecutable)",
@@ -293,10 +285,7 @@
                 @"LDECompilerFlags": NXCompilerFlagsForCodeTemplateLanguage(language),
                 @"LDELinkerFlags": NXLinkerFlagsForCodeTemplateLanguage(language),
                 @"LDESwiftCompilerPath": @"$(BSROOT)/Toolchains/Swift/usr/bin/swiftc",
-                @"LDESwiftCompilerFlags": @[
-                    @"-swift-version",
-                    @"5"
-                ],
+                @"LDESwiftCompilerFlags": swiftCompilerFlags,
                 @"LDESwiftModuleName": name,
                 @"LDESwiftBridgingHeader": @"",
                 @"LDEOutputPath": @"$(CACHEROOT)/$(LDEExecutable)",

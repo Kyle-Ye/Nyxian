@@ -1,0 +1,22 @@
+import SwiftUI
+
+@main
+struct NyxianApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+
+struct ContentView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "globe")
+                .imageScale(.large)
+                .foregroundStyle(.blue)
+            Text("Hello, Nyxian")
+        }
+        .padding()
+    }
+}

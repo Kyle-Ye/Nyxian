@@ -92,10 +92,11 @@ Shared/SwiftToolchain/usr/lib/swift/...
 7. Foundation/stdlib/SDK module import proof: passing experimentally with Xcode iPhoneOS prebuilt modules.
 8. Swift executable proof with `main.swift`, `Foundation`, and `UIKit`: done.
 9. Real Swift utility project build/run in Nyxian: done with project `BB`.
-10. Multi-file Swift module compilation: pending.
-11. SwiftUI app lifecycle template: next.
-12. Link/run Swift code in produced apps: pending.
-13. Diagnostics and project UI polish: pending.
+10. Initial SwiftUI app lifecycle template: in progress.
+11. SwiftUI app project creation UI: done.
+12. Multi-file Swift module compilation: pending.
+13. Link/run Swift code in produced apps: pending.
+14. Diagnostics and project UI polish: pending.
 
 ## 2026-04-21 Findings
 
@@ -109,6 +110,11 @@ Shared/SwiftToolchain/usr/lib/swift/...
 - `BB`, a newly created Swift utility project, now builds and runs inside Nyxian with `main.swift`, `Foundation`, and `UIKit`.
 - Swift-only linker job generation needed a placeholder object path before `CCKDriver.generateJobs()`. Without it, the linker job could omit the Swift object because `compileSwift()` had not produced it yet, causing `undefined symbol: main`.
 - New Swift projects use lowercase `main.swift`; existing single-file projects with different casing are normalized through a cache-side `main.swift` copy during compilation.
+- SwiftUI app creation is now exposed under App -> SwiftUI and writes `Application/SwiftUI/main.swift`.
+- SwiftUI `@main` app sources need `-parse-as-library`; without it, the compiler rejects `@main` with a top-level-code diagnostic.
+- The local SwiftUI module-resource closure currently includes `SwiftUI`, `SwiftUICore`, `Combine`, `Observation`, `DeveloperToolsSupport`, and `Spatial` from Xcode's iPhoneOS prebuilt modules.
+- Nyxian itself builds, installs, and launches on the connected iPhone with the SwiftUI template changes.
+- Host-side validation with Nyxian's bundled Swift resource dir still exposes a Clang module mismatch around `Spatial`/`simd`. The next meaningful validation is creating a real SwiftUI app project in Nyxian and compiling through CoreCompiler on device.
 
 ## Foundation Support Options
 

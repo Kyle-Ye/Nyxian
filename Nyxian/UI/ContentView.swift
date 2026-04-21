@@ -50,7 +50,12 @@ import UIKit
             self.createProject(mode: .app, withLanguage: .objC)
         }
         
-        let applicationMenu: UIMenu = UIMenu(title: "App", image: UIImage(systemName: "app.gift.fill"), children: [ObjCApp])
+        let SwiftUIApp: UIAction = UIAction(title: "SwiftUI") { [weak self] _ in
+            guard let self = self else { return }
+            self.createProject(mode: .app, withLanguage: .swiftUI)
+        }
+
+        let applicationMenu: UIMenu = UIMenu(title: "App", image: UIImage(systemName: "app.gift.fill"), children: [ObjCApp, SwiftUIApp])
         
         /* utility menu */
         let CUtility: UIAction = UIAction(title: "C") { [weak self] _ in

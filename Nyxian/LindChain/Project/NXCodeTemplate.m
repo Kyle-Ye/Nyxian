@@ -90,6 +90,10 @@ NSArray *NXCompilerFlagsForCodeTemplateLanguage(NXCodeTemplateLanguage language)
     {
         return @[];
     }
+    else if([language isEqualToString:NXCodeTemplateLanguageSwiftUI])
+    {
+        return @[];
+    }
     return nil;
 }
 
@@ -140,10 +144,13 @@ NSArray *NXLinkerFlagsForCodeTemplateLanguage(NXCodeTemplateLanguage language)
             @"-syslibroot",
             @"$(SDKROOT)",
             @"-L$(BSROOT)/lib",
+            @"-ObjC",
             @"-lc",
             @"-lclang_rt.ios",
             @"-framework",
             @"Foundation",
+            @"-framework",
+            @"UIKit",
         ];
     }
     else if([language isEqualToString:NXCodeTemplateLanguageSwift])
@@ -153,6 +160,17 @@ NSArray *NXLinkerFlagsForCodeTemplateLanguage(NXCodeTemplateLanguage language)
             @"Foundation",
             @"-framework",
             @"UIKit"
+        ];
+    }
+    else if([language isEqualToString:NXCodeTemplateLanguageSwiftUI])
+    {
+        return @[
+            @"-framework",
+            @"Foundation",
+            @"-framework",
+            @"UIKit",
+            @"-framework",
+            @"SwiftUI"
         ];
     }
     return nil;
