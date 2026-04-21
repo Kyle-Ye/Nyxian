@@ -232,19 +232,29 @@
     };
 
     NSDictionary *projConfigPlist = nil;
-    NSDictionary *appInfoDictionary = [language isEqualToString:NXCodeTemplateLanguageSwiftUI] ? @{} : @{
+    NSDictionary *sceneManifest = @{
         @"UIApplicationSceneManifest": @{
             @"UIApplicationSupportsMultipleScenes": @(NO),
             @"UISceneConfigurations": @{
                 @"UIWindowSceneSessionRoleApplication": @[
                     @{
-                        @"UISceneConfigurationName": @"Default Configuration",
-                        @"UISceneDelegateClassName": @"SceneDelegate"
+                        @"UISceneConfigurationName": @"Default Configuration"
                     }
                 ]
             }
         }
     };
+    NSMutableDictionary *appInfoDictionary = [sceneManifest mutableCopy];
+    if(![language isEqualToString:NXCodeTemplateLanguageSwiftUI])
+    {
+        NSMutableDictionary *sceneInfo = [[sceneManifest objectForKey:@"UIApplicationSceneManifest"] mutableCopy];
+        NSMutableDictionary *sceneConfigurations = [[sceneInfo objectForKey:@"UISceneConfigurations"] mutableCopy];
+        NSMutableDictionary *applicationScene = [[[sceneConfigurations objectForKey:@"UIWindowSceneSessionRoleApplication"] firstObject] mutableCopy];
+        [applicationScene setObject:@"SceneDelegate" forKey:@"UISceneDelegateClassName"];
+        [sceneConfigurations setObject:@[applicationScene] forKey:@"UIWindowSceneSessionRoleApplication"];
+        [sceneInfo setObject:sceneConfigurations forKey:@"UISceneConfigurations"];
+        [appInfoDictionary setObject:sceneInfo forKey:@"UIApplicationSceneManifest"];
+    }
     NSArray *swiftCompilerFlags = [language isEqualToString:NXCodeTemplateLanguageSwiftUI] ? @[
         @"-swift-version",
         @"5",

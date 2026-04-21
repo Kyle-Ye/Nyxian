@@ -156,6 +156,19 @@ class Builder: NSObject, CCKDriverDelegate {
         ].joined(separator: ":")
     }
 
+    private static func swiftUISceneManifest() -> [String: Any] {
+        [
+            "UIApplicationSupportsMultipleScenes": false,
+            "UISceneConfigurations": [
+                "UIWindowSceneSessionRoleApplication": [
+                    [
+                        "UISceneConfigurationName": "Default Configuration"
+                    ]
+                ]
+            ]
+        ]
+    }
+
     private static func swiftLinkerArguments(objectFiles: [String], outputPath: String, project: NXProject) -> [String] {
         var arguments: [String] = [
             "-target",
@@ -380,6 +393,11 @@ class Builder: NSObject, CCKDriverDelegate {
                 infoPlistData[key as! String] = value
             }
 
+            if infoPlistData["UIApplicationSceneManifest"] == nil,
+               self.usesSwiftUILifecycle() {
+                infoPlistData["UIApplicationSceneManifest"] = Builder.swiftUISceneManifest()
+            }
+
             let infoPlistDataSerialized = try PropertyListSerialization.data(fromPropertyList: infoPlistData, format: .xml, options: 0)
             FileManager.default.createFile(atPath:"\(bundlePath)/Info.plist", contents: infoPlistDataSerialized, attributes: nil)
         }
@@ -522,6 +540,13 @@ class Builder: NSObject, CCKDriverDelegate {
         try? FileManager.default.removeItem(atPath: mainSourceFile)
         try FileManager.default.copyItem(atPath: sourceFile, toPath: mainSourceFile)
         return [mainSourceFile]
+    }
+
+    private func usesSwiftUILifecycle() -> Bool {
+        swiftSourceFiles.contains { sourceFile in
+            ((sourceFile as NSString).lastPathComponent == "App.swift") ||
+            ((try? String(contentsOfFile: sourceFile, encoding: .utf8))?.contains("import SwiftUI") == true)
+        }
     }
 
     func link() throws {
