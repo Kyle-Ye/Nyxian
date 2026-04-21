@@ -72,7 +72,7 @@
          <EnvironmentVariable
             key = "NYXIAN_SWIFT_TEST"
             value = "1"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </EnvironmentVariable>
       </EnvironmentVariables>
    </LaunchAction>
